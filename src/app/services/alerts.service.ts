@@ -745,20 +745,23 @@ export class AlertsService {
   addStaff(input: {
     name: string;
     role: StaffRole;
-    zone: string;
     phone: string;
-    status: StaffStatus;
+    email?: string;
+    zone?: string;
+    status?: StaffStatus;
     callSign?: string;
   }): StaffMember {
+    const status: StaffStatus = input.status ?? 'on_shift';
     const member: StaffMember = {
       id: `st-${Date.now().toString(36)}`,
       name: input.name.trim(),
       role: input.role,
-      zone: input.zone.trim(),
+      zone: (input.zone ?? '').trim(),
       phone: input.phone.trim(),
-      status: input.status,
+      email: input.email?.trim() || undefined,
+      status,
       callSign: input.callSign?.trim() || undefined,
-      shiftStart: input.status === 'off_shift' ? undefined : new Date(),
+      shiftStart: status === 'off_shift' ? undefined : new Date(),
     };
     this._staff.set([member, ...this._staff()]);
     this.showToast(`${member.name} added to roster`);

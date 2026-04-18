@@ -96,6 +96,7 @@ export interface StaffMember {
   /** Human-readable zone they're currently assigned to. */
   zone: string;
   phone: string;
+  email?: string;
   status: StaffStatus;
   /** When the current shift started — undefined when off shift. */
   shiftStart?: Date;
