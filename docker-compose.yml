@@ -1,7 +1,91 @@
+# Vigilant Architect — app stack.
+#
+# Public entrypoint is served by the Traefik instance running on the host
+# via the external `proxy` network. Only the `web` container joins that
+# network; `db` and `api` stay on the internal `vigilant-net` and are not
+# reachable from the internet.
+#
+#   https://vireal.club        -> nginx (Angular SPA + /api proxy to PostgREST)
+#
+# Rebuild + deploy:
+#   docker compose up --build -d
+
 services:
+  db:
+    image: postgres:17
+    container_name: vigilant-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vigilant
+      POSTGRES_PASSWORD: vigilant
+      POSTGRES_DB: vigilant
+    # DB is not exposed to the public internet. Bind to localhost on the VM
+    # so you can still tunnel in with `ssh -L 5442:localhost:5442 vm` if
+    # you need psql / DBeaver access. Remove this whole block for full lockdown.
+    ports:
+      - "127.0.0.1:5442:5432"
+    volumes:
+      - vigilant-pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vigilant -d vigilant"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [vigilant-net]
+
+  api:
+    image: postgrest/postgrest:v12.2.3
+    container_name: vigilant-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:authenticator@db:5432/vigilant
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: web_anon
+      PGRST_OPENAPI_SERVER_PROXY_URI: https://vireal.club/api
+      PGRST_SERVER_PORT: 3000
+    expose:
+      - "3000"
+    networks: [vigilant-net]
+
   web:
+    build: .
     image: vigilant-architect:latest
     container_name: vigilant-architect
-    ports:
-      - "8080:80"
     restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      API_URL: http://api:3000
+    # Traefik's docker provider skips containers whose health status isn't
+    # `healthy`. The Dockerfile's wget-based healthcheck has been flaky on
+    # BusyBox and leaves the container stuck in `starting`, so disable it
+    # at the compose layer and let the restart policy + Traefik handle it.
+    healthcheck:
+      disable: true
+    networks:
+      - vigilant-net     # so nginx can proxy /api/ to the `api` service
+      - proxy            # so Traefik on the host can route to it
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.docker.network=proxy'
+
+      - 'traefik.http.routers.vigilant-web.rule=Host(`vireal.club`)'
+      - 'traefik.http.routers.vigilant-web.entrypoints=websecure'
+      - 'traefik.http.routers.vigilant-web.priority=100'
+      - 'traefik.http.routers.vigilant-web.tls.certresolver=le'
+
+      - 'traefik.http.services.vigilant-web.loadbalancer.server.port=80'
+
+volumes:
+  vigilant-pgdata:
+
+networks:
+  vigilant-net:
+    driver: bridge
+  proxy:
+    external: true
+    name: proxy
