@@ -73,6 +73,8 @@ export interface GuestReport {
   location: string;
   /** Display handle: "Anonymous", "Guest #A47", or a nickname */
   guestHandle: string;
+  guestEmail: string;
+  photoUrl?: string;
   submittedAt: Date;
   status: GuestReportStatus;
   priority: GuestReportPriority;
