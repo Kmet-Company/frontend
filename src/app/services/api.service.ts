@@ -87,6 +87,7 @@ type GuestReportRow = {
   message: string;
   location: string;
   guest_handle: string;
+  guest_email: string;
   submitted_at: string;
   status: GuestReportStatus;
   priority: GuestReportPriority;
@@ -317,5 +318,6 @@ export class ApiService {
     submittedAt: new Date(row.submitted_at),
     status: row.status,
     priority: row.priority,
+    guestEmail: row.guest_email,
   });
 }
