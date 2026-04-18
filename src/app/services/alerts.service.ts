@@ -11,9 +11,6 @@ import {
   IncidentEvent,
   ResponseNote,
   RiskLevel,
-  StaffMember,
-  StaffRole,
-  StaffStatus,
   VenueAlert,
 } from '../models/venue.models';
 import { ApiService } from './api.service';
@@ -27,9 +24,8 @@ import { ApiService } from './api.service';
  * note) are applied optimistically to the signal AND posted to the DB so
  * they survive a refresh.
  *
- * `_staff` is still in-memory because staff identity is managed by Keycloak;
- * the Postgres `staff_presence` table only stores shift + zone by user id
- * and will be wired up once Keycloak is live.
+ * Staff identity lives entirely in Keycloak — see {@link StaffService} for
+ * the Admin-API-backed roster used by the Staff page.
  */
 @Injectable({ providedIn: 'root' })
 export class AlertsService {
@@ -403,114 +399,6 @@ export class AlertsService {
     },
   ]);
 
-  private readonly _staff = signal<StaffMember[]>([
-    {
-      id: 'st-001',
-      name: 'Officer Miller',
-      role: 'security',
-      zone: 'Bar Area',
-      phone: '+386 41 220 014',
-      status: 'on_shift',
-      shiftStart: this.hoursAgo(3),
-      callSign: 'Unit 14',
-    },
-    {
-      id: 'st-002',
-      name: 'Officer Chen',
-      role: 'security',
-      zone: 'North Plaza',
-      phone: '+386 41 220 018',
-      status: 'on_shift',
-      shiftStart: this.hoursAgo(3),
-      callSign: 'Unit 04',
-    },
-    {
-      id: 'st-003',
-      name: 'R. Okafor',
-      role: 'medic',
-      zone: 'Dance Floor',
-      phone: '+386 41 775 210',
-      status: 'on_shift',
-      shiftStart: this.hoursAgo(2),
-      callSign: 'Medic 02',
-    },
-    {
-      id: 'st-004',
-      name: 'Priya Ramaswamy',
-      role: 'floor_lead',
-      zone: 'Main Stage',
-      phone: '+386 41 580 902',
-      status: 'on_shift',
-      shiftStart: this.hoursAgo(4),
-      callSign: 'Floor Lead',
-    },
-    {
-      id: 'st-005',
-      name: 'Jamal Khoury',
-      role: 'door_staff',
-      zone: 'Front Door',
-      phone: '+386 41 330 114',
-      status: 'on_shift',
-      shiftStart: this.hoursAgo(3),
-      callSign: 'Gate Supervisor',
-    },
-    {
-      id: 'st-006',
-      name: 'Marco Bellini',
-      role: 'security',
-      zone: 'South Concourse',
-      phone: '+386 41 441 702',
-      status: 'on_break',
-      shiftStart: this.hoursAgo(3),
-      callSign: 'Floor Team',
-    },
-    {
-      id: 'st-007',
-      name: 'Admin Sarah',
-      role: 'dispatcher',
-      zone: 'Control Room',
-      phone: '+386 41 090 001',
-      status: 'on_shift',
-      shiftStart: this.hoursAgo(5),
-      callSign: 'Dispatch 01',
-    },
-    {
-      id: 'st-008',
-      name: 'Noa Perez',
-      role: 'manager',
-      zone: 'Control Room',
-      phone: '+386 41 018 555',
-      status: 'on_shift',
-      shiftStart: this.hoursAgo(5),
-      callSign: 'Shift Manager',
-    },
-    {
-      id: 'st-009',
-      name: 'Danny Tran',
-      role: 'bar_staff',
-      zone: 'Main Bar',
-      phone: '+386 41 844 312',
-      status: 'on_shift',
-      shiftStart: this.hoursAgo(2),
-    },
-    {
-      id: 'st-010',
-      name: 'Elena Vidmar',
-      role: 'medic',
-      zone: 'Medical Room',
-      phone: '+386 41 775 222',
-      status: 'off_shift',
-    },
-    {
-      id: 'st-011',
-      name: 'Luka Novak',
-      role: 'security',
-      zone: 'VIP Lounge',
-      phone: '+386 41 220 099',
-      status: 'off_shift',
-    },
-  ]);
-
   private readonly _selectedCameraId = signal<string | null>(null);
   private readonly _viewMode = signal<'grid' | 'focus'>('grid');
   private readonly _toast = signal<string | null>(null);
@@ -520,7 +408,6 @@ export class AlertsService {
   readonly alerts = this._alerts.asReadonly();
   readonly history = this._history.asReadonly();
   readonly guestReports = this._guestReports.asReadonly();
-  readonly staff = this._staff.asReadonly();
   readonly selectedCameraId = this._selectedCameraId.asReadonly();
   readonly viewMode = this._viewMode.asReadonly();
   readonly toast = this._toast.asReadonly();
@@ -561,16 +448,6 @@ export class AlertsService {
     console.warn(`[AlertsService] ${source} failed`, err);
     return of(null);
   }
-
-  readonly staffOnShiftCount = computed(
-    () => this._staff().filter((s) => s.status === 'on_shift').length,
-  );
-  readonly staffOnBreakCount = computed(
-    () => this._staff().filter((s) => s.status === 'on_break').length,
-  );
-  readonly staffOffShiftCount = computed(
-    () => this._staff().filter((s) => s.status === 'off_shift').length,
-  );
 
   readonly allIncidents = computed<VenueAlert[]>(() =>
     [...this._alerts(), ...this._history()].sort(
@@ -898,56 +775,6 @@ export class AlertsService {
     return 'low';
   }
 
-  addStaff(input: {
-    name: string;
-    role: StaffRole;
-    phone: string;
-    email?: string;
-    zone?: string;
-    status?: StaffStatus;
-    callSign?: string;
-  }): StaffMember {
-    const status: StaffStatus = input.status ?? 'on_shift';
-    const member: StaffMember = {
-      id: `st-${Date.now().toString(36)}`,
-      name: input.name.trim(),
-      role: input.role,
-      zone: (input.zone ?? '').trim(),
-      phone: input.phone.trim(),
-      email: input.email?.trim() || undefined,
-      status,
-      callSign: input.callSign?.trim() || undefined,
-      shiftStart: status === 'off_shift' ? undefined : new Date(),
-    };
-    this._staff.set([member, ...this._staff()]);
-    this.showToast(`${member.name} added to roster`);
-    return member;
-  }
-
-  removeStaff(id: string): void {
-    const target = this._staff().find((s) => s.id === id);
-    if (!target) return;
-    this._staff.set(this._staff().filter((s) => s.id !== id));
-    this.showToast(`${target.name} removed from roster`);
-  }
-
-  updateStaffStatus(id: string, status: StaffStatus): void {
-    this._staff.set(
-      this._staff().map((s) =>
-        s.id === id
-          ? {
-              ...s,
-              status,
-              shiftStart:
-                status === 'off_shift'
-                  ? undefined
-                  : s.shiftStart ?? new Date(),
-            }
-          : s,
-      ),
-    );
-  }
-
   private setGuestReportStatusLocal(
     id: string,
     status: GuestReport['status'],
@@ -1035,10 +862,6 @@ export class AlertsService {
 
   private minutesAgo(minutes: number): Date {
     return new Date(Date.now() - minutes * 60_000);
-  }
-
-  private hoursAgo(hours: number): Date {
-    return new Date(Date.now() - hours * 60 * 60_000);
   }
 
   private seedActive(input: {
