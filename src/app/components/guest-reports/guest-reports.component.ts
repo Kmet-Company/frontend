@@ -89,20 +89,13 @@ const KIND_META: Record<GuestReportKind, KindMeta> = {
 
               <div class="flex-1 min-w-0">
                 <div class="flex items-start justify-between gap-3">
-                  <div class="min-w-0">
-                    <div class="flex items-center gap-2 flex-wrap">
-                      <span [class]="kindPillClass(report)">
-                        {{ meta(report.kind).label }}
-                      </span>
-                      <span [class]="statusPillClass(report.status)">
-                        {{ statusLabel(report.status) }}
-                      </span>
-                    </div>
-                    <h3
-                      class="mt-1.5 text-sm font-semibold text-on-surface leading-snug truncate"
-                    >
-                      {{ report.title }}
-                    </h3>
+                  <div class="flex items-center gap-2 flex-wrap min-w-0">
+                    <span [class]="kindPillClass(report)">
+                      {{ meta(report.kind).label }}
+                    </span>
+                    <span [class]="statusPillClass(report.status)">
+                      {{ statusLabel(report.status) }}
+                    </span>
                   </div>
                   <time
                     class="text-[11px] text-on-surface-variant whitespace-nowrap mt-0.5"
@@ -113,11 +106,28 @@ const KIND_META: Record<GuestReportKind, KindMeta> = {
                 </div>
 
                 <p
-                  class="mt-2 text-[12.5px] text-on-surface-variant leading-relaxed line-clamp-1"
+                  class="mt-2 text-[12.5px] text-on-surface leading-relaxed"
                   [title]="report.message"
                 >
                   {{ report.message }}
                 </p>
+
+                @if (report.photoUrl) {
+                  <a
+                    [href]="report.photoUrl"
+                    target="_blank"
+                    rel="noopener"
+                    class="mt-2 block w-full max-w-xs overflow-hidden rounded-lg border border-outline-variant"
+                    [title]="'Open photo attached by ' + report.guestEmail"
+                  >
+                    <img
+                      [src]="report.photoUrl"
+                      [alt]="'Photo attached to report ' + report.reference"
+                      loading="lazy"
+                      class="w-full h-32 object-cover"
+                    />
+                  </a>
+                }
 
                 <div
                   class="mt-2 flex items-center gap-x-3 gap-y-1 text-[11px] text-on-surface-variant flex-wrap"
@@ -128,11 +138,11 @@ const KIND_META: Record<GuestReportKind, KindMeta> = {
                     >
                     {{ report.location }}
                   </span>
-                  <span class="inline-flex items-center gap-1">
+                  <span class="inline-flex items-center gap-1 min-w-0">
                     <span class="material-symbols-outlined text-[13px]"
-                      >person</span
+                      >mail</span
                     >
-                    {{ report.guestHandle }}
+                    <span class="truncate">{{ report.guestEmail }}</span>
                   </span>
                 </div>
 
@@ -158,19 +168,6 @@ const KIND_META: Record<GuestReportKind, KindMeta> = {
                     >
                     Dismiss
                   </button>
-
-                  <div class="ml-auto flex items-center gap-2">
-                    @if (report.priority === 'high') {
-                      <span
-                        class="inline-flex items-center gap-1 px-2 h-6 rounded-full bg-error-container/70 text-on-error-container text-[10px] font-bold uppercase tracking-wider"
-                      >
-                        <span class="material-symbols-outlined text-[12px]"
-                          >priority_high</span
-                        >
-                        Priority
-                      </span>
-                    }
-                  </div>
                 </div>
               </div>
             </div>

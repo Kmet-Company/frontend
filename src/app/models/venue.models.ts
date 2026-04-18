@@ -73,6 +73,8 @@ export interface GuestReport {
   location: string;
   /** Display handle: "Anonymous", "Guest #A47", or a nickname */
   guestHandle: string;
+  guestEmail: string;
+  photoUrl?: string;
   submittedAt: Date;
   status: GuestReportStatus;
   priority: GuestReportPriority;
@@ -96,6 +98,7 @@ export interface StaffMember {
   /** Human-readable zone they're currently assigned to. */
   zone: string;
   phone: string;
+  email?: string;
   status: StaffStatus;
   /** When the current shift started — undefined when off shift. */
   shiftStart?: Date;
