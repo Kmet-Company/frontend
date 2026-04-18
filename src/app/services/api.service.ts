@@ -36,6 +36,7 @@ type CameraRow = {
   zone: string;
   icon: string | null;
   image_url: string | null;
+  video_url: string | null;
   occupancy: number | null;
   density: 'low' | 'medium' | 'high' | null;
 };
@@ -110,7 +111,7 @@ export class ApiService {
 
   getCameras(): Observable<CameraFeed[]> {
     const params =
-      'select=code,label,zone,icon,image_url,occupancy,density&order=label.asc';
+      'select=code,label,zone,icon,image_url,video_url,occupancy,density&order=label.asc';
     return this.http
       .get<CameraRow[]>(`${this.base}/camera?${params}`)
       .pipe(map((rows) => rows.map(this.toCamera)));
@@ -253,6 +254,7 @@ export class ApiService {
     zone: row.zone,
     icon: row.icon ?? 'videocam',
     imageUrl: row.image_url ?? '',
+    videoUrl: row.video_url ?? undefined,
     occupancy: row.occupancy ?? undefined,
     density: row.density ?? undefined,
   });

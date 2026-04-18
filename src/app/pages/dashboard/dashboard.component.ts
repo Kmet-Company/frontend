@@ -6,9 +6,10 @@ import {
   inject,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { map } from 'rxjs';
+import { catchError, EMPTY, interval, map, of, startWith, switchMap } from 'rxjs';
 
 import { ActivatedRoute, Router } from '@angular/router';
+import { DatePipe } from '@angular/common';
 
 /** Wide-angle "scanning" view vs. picture-in-picture focus on a feed. */
 type ViewMode = 'grid' | 'focus';
@@ -19,6 +20,11 @@ import { GuestReportsComponent } from '../../components/guest-reports/guest-repo
 import { PulseMonitorComponent } from '../../components/pulse-monitor/pulse-monitor.component';
 import { ToastComponent } from '../../components/toast/toast.component';
 import { AlertsService } from '../../services/alerts.service';
+import {
+  AiGatewayService,
+  GatewayDetectionsResponse,
+  GatewayHealth,
+} from '../../services/ai-gateway.service';
 import { BoundingBox, CameraFeed } from '../../models/venue.models';
 
 @Component({
@@ -26,6 +32,7 @@ import { BoundingBox, CameraFeed } from '../../models/venue.models';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    DatePipe,
     CameraFeedComponent,
     AlertCardComponent,
     GuestReportsComponent,
@@ -56,6 +63,51 @@ import { BoundingBox, CameraFeed } from '../../models/venue.models';
                 >Live Stream</span
               >
             </div>
+
+            <div
+              class="hidden md:flex flex-col justify-center gap-0.5 px-2 py-1 rounded-lg bg-surface-container/80 text-[10px] leading-tight text-on-surface-variant max-w-[11rem]"
+              title="AI gateway"
+            >
+              @if (gatewayHealth(); as h) {
+                <span>
+                  AI gateway: {{ h.ok ? 'ok' : 'offline' }} ·
+                  {{ h.ai_vision_configured ? 'torch model' : 'mock' }}
+                </span>
+              } @else {
+                <span>AI gateway: …</span>
+              }
+              @if (lastDetectionForSelected(); as det) {
+                @if (det.error) {
+                  <span class="text-error/90 truncate" [title]="det.error"
+                    >Last run: error</span
+                  >
+                } @else if (det.at) {
+                  <span class="truncate"
+                    >Last run: {{ det.at | date : 'short' }}</span
+                  >
+                }
+              }
+            </div>
+
+            <button
+              type="button"
+              (click)="analyzeSelected()"
+              class="hidden sm:inline-flex items-center gap-1.5 px-2.5 h-9 rounded-lg bg-surface-container text-on-surface text-xs font-semibold hover:bg-surface-container-high transition-colors"
+              title="Run violence classifier on the selected camera clip (gateway downloads the configured MP4)"
+            >
+              <span class="material-symbols-outlined text-[16px]">psychology</span>
+              <span>Analyze</span>
+            </button>
+
+            <button
+              type="button"
+              (click)="analyzeAll()"
+              class="hidden lg:inline-flex items-center gap-1.5 px-2.5 h-9 rounded-lg bg-surface-container text-on-surface text-xs font-semibold hover:bg-surface-container-high transition-colors"
+              title="Analyze every camera with a video_url"
+            >
+              <span class="material-symbols-outlined text-[16px]">hub</span>
+              <span>All</span>
+            </button>
 
             <!-- View mode toggle -->
             <div
@@ -144,12 +196,25 @@ import { BoundingBox, CameraFeed } from '../../models/venue.models';
                     (click)="onCameraClick(camera.id)"
                     [class]="thumbnailClass(camera)"
                   >
-                    <img
-                      [src]="camera.imageUrl"
-                      [alt]="camera.label + ' thumbnail'"
-                      class="w-full h-full object-cover"
-                      loading="lazy"
-                    />
+                    @if (camera.videoUrl) {
+                      <video
+                        [src]="camera.videoUrl"
+                        [poster]="camera.imageUrl"
+                        class="w-full h-full object-cover pointer-events-none"
+                        muted
+                        loop
+                        playsinline
+                        preload="metadata"
+                        autoplay
+                      ></video>
+                    } @else {
+                      <img
+                        [src]="camera.imageUrl"
+                        [alt]="camera.label + ' thumbnail'"
+                        class="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    }
                     <div
                       class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"
                     ></div>
@@ -266,8 +331,42 @@ import { BoundingBox, CameraFeed } from '../../models/venue.models';
 })
 export class DashboardComponent {
   protected readonly alerts = inject(AlertsService);
+  private readonly gateway = inject(AiGatewayService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+
+  /** Poll gateway health / last detections so operators see mock vs real model. */
+  protected readonly gatewayHealth = toSignal(
+    interval(25_000).pipe(
+      startWith(0),
+      switchMap(() =>
+        this.gateway.getHealth().pipe(catchError(() => of(null))),
+      ),
+    ),
+    { initialValue: null as GatewayHealth | null },
+  );
+
+  private readonly gatewayDetections = toSignal(
+    interval(25_000).pipe(
+      startWith(0),
+      switchMap(() =>
+        this.gateway.getDetections().pipe(
+          catchError(
+            () =>
+              of({ cameras: {} } as GatewayDetectionsResponse),
+          ),
+        ),
+      ),
+    ),
+    { initialValue: { cameras: {} } as GatewayDetectionsResponse },
+  );
+
+  protected readonly lastDetectionForSelected = computed(() => {
+    const id =
+      this.alerts.selectedCameraId() ?? this.alerts.cameras()[0]?.id;
+    if (!id) return null;
+    return this.gatewayDetections().cameras[id] ?? null;
+  });
 
   /** View mode lives on the service so the top-bar logo can reset it. */
   protected readonly mode = this.alerts.viewMode;
@@ -357,6 +456,40 @@ export class DashboardComponent {
     return mode === this.mode()
       ? `${base} bg-surface-bright text-on-surface`
       : `${base} text-on-surface-variant hover:text-on-surface`;
+  }
+
+  protected analyzeSelected(): void {
+    const id =
+      this.alerts.selectedCameraId() ?? this.alerts.cameras()[0]?.id;
+    if (!id) {
+      this.alerts.showToast('No camera available');
+      return;
+    }
+    this.gateway
+      .analyzeCamera(id)
+      .pipe(
+        catchError(() => {
+          this.alerts.showToast('AI analysis failed');
+          return EMPTY;
+        }),
+      )
+      .subscribe(() => {
+        this.alerts.showToast(`AI analysis finished for ${id}`);
+      });
+  }
+
+  protected analyzeAll(): void {
+    this.gateway
+      .analyzeAll()
+      .pipe(
+        catchError(() => {
+          this.alerts.showToast('AI batch analysis failed');
+          return EMPTY;
+        }),
+      )
+      .subscribe(() => {
+        this.alerts.showToast('AI analysis finished for all cameras');
+      });
   }
 
   protected thumbnailClass(camera: CameraFeed): string {

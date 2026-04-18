@@ -51,6 +51,35 @@ services:
       - "3000"
     networks: [vigilant-net]
 
+  gateway:
+    build: ../gateway
+    image: vigilant-gateway:latest
+    container_name: vigilant-gateway
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      POSTGREST_URL: http://api:3000
+      # Set to http://ai-vision:8000 when running `docker compose --profile ai up`
+      AI_VISION_URL: ${AI_VISION_URL:-}
+      # Periodic analysis (seconds). 0 = disabled; use POST /gateway/analyze/{code} from UI.
+      ANALYSIS_INTERVAL_SEC: ${ANALYSIS_INTERVAL_SEC:-0}
+    expose:
+      - "8000"
+    networks: [vigilant-net]
+
+  ai-vision:
+    profiles: ["ai"]
+    build:
+      context: ../ai
+      dockerfile: Dockerfile
+    image: vigilant-ai-vision:latest
+    container_name: vigilant-ai-vision
+    restart: unless-stopped
+    expose:
+      - "8000"
+    networks: [vigilant-net]
+
   web:
     build: .
     image: vigilant-architect:latest
@@ -58,6 +87,7 @@ services:
     restart: unless-stopped
     depends_on:
       - api
+      - gateway
     environment:
       API_URL: http://api:3000
     # Traefik's docker provider skips containers whose health status isn't

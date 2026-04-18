@@ -71,7 +71,8 @@ CREATE TABLE camera (
   label      TEXT            NOT NULL,              -- "Main Floor"
   zone       TEXT            NOT NULL,              -- "Dance Floor"
   icon       TEXT,                                  -- Material Symbols name
-  image_url  TEXT,                                  -- current frame / preview
+  image_url  TEXT,                                  -- current frame / preview / poster
+  video_url  TEXT,                                  -- looping feed (MP4 or HTTPS URL)
   occupancy  INTEGER         CHECK (occupancy IS NULL OR occupancy >= 0),
   density    camera_density,
   active     BOOLEAN         NOT NULL DEFAULT TRUE,
@@ -324,15 +325,15 @@ INSERT INTO venue (code, name, subvenue, timezone) VALUES
   ('foundry-north-hall', 'The Foundry', 'North Hall', 'Europe/Ljubljana');
 
 -- -------- Cameras --------
-INSERT INTO camera (venue_id, code, label, zone, icon, image_url, occupancy, density)
-SELECT v.id, c.code, c.label, c.zone, c.icon, c.image_url, c.occupancy, c.density::camera_density
+INSERT INTO camera (venue_id, code, label, zone, icon, image_url, video_url, occupancy, density)
+SELECT v.id, c.code, c.label, c.zone, c.icon, c.image_url, c.video_url, c.occupancy, c.density::camera_density
 FROM   venue v
 JOIN   (VALUES
-  ('cam-main',     'Main Floor',     'Dance Floor', 'layers',         'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&w=1200&q=70', 612, 'high'),
-  ('cam-bar',      'Bar Area',       'Main Bar',    'local_bar',      'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=1200&q=70', 184, 'medium'),
-  ('cam-entrance', 'Entrance Queue', 'Front Door',  'groups',         'https://images.unsplash.com/photo-1493676304819-0d7a8d026dcf?auto=format&fit=crop&w=1200&q=70',  96, 'medium'),
-  ('cam-stage',    'Stage Crowd',    'Main Stage',  'theater_comedy', 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?auto=format&fit=crop&w=1200&q=70', 842, 'high')
-) AS c(code, label, zone, icon, image_url, occupancy, density) ON TRUE
+  ('cam-main',     'Main Floor',     'Dance Floor', 'layers',         'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&w=1200&q=70', 'https://filesamples.com/samples/video/mp4/sample_640x360.mp4', 612, 'high'),
+  ('cam-bar',      'Bar Area',       'Main Bar',    'local_bar',      'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=1200&q=70', 'https://filesamples.com/samples/video/mp4/sample_640x360.mp4', 184, 'medium'),
+  ('cam-entrance', 'Entrance Queue', 'Front Door',  'groups',         'https://images.unsplash.com/photo-1493676304819-0d7a8d026dcf?auto=format&fit=crop&w=1200&q=70', 'https://filesamples.com/samples/video/mp4/sample_640x360.mp4',  96, 'medium'),
+  ('cam-stage',    'Stage Crowd',    'Main Stage',  'theater_comedy', 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?auto=format&fit=crop&w=1200&q=70', 'https://filesamples.com/samples/video/mp4/sample_640x360.mp4', 842, 'high')
+) AS c(code, label, zone, icon, image_url, video_url, occupancy, density) ON TRUE
 WHERE v.code = 'foundry-north-hall';
 
 -- -------- Escalation action catalog --------

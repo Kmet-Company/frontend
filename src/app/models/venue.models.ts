@@ -18,7 +18,10 @@ export interface CameraFeed {
   id: string;
   label: string;
   zone: string;
+  /** Poster / fallback still when `videoUrl` is set */
   imageUrl: string;
+  /** HTTPS or same-origin MP4 URL for looping tile playback */
+  videoUrl?: string;
   icon: string;
   occupancy?: number;
   density?: 'low' | 'medium' | 'high';

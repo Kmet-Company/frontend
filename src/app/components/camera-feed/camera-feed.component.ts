@@ -18,12 +18,25 @@ import { BoundingBox, CameraFeed } from '../../models/venue.models';
       (click)="select.emit(camera().id)"
       [class]="wrapperClass()"
     >
-      <img
-        class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-300"
-        [src]="camera().imageUrl"
-        [alt]="camera().label + ' camera feed'"
-        loading="lazy"
-      />
+      @if (camera().videoUrl) {
+        <video
+          class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+          [src]="camera().videoUrl"
+          [poster]="camera().imageUrl || undefined"
+          autoplay
+          muted
+          loop
+          playsinline
+          preload="metadata"
+        ></video>
+      } @else {
+        <img
+          class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-300"
+          [src]="camera().imageUrl"
+          [alt]="camera().label + ' camera feed'"
+          loading="lazy"
+        />
+      }
 
       <!-- Subtle vignette to make labels legible without heavy overlays -->
       <div
