@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Vigilant Architect | Operational Serenity</title>
+  <base href="/" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Venue safety and event operations dashboard for nightclubs, concerts, and festivals." />
+  <!-- Theme follows the user's OS setting; give the browser chrome a matching tint. -->
+  <meta name="theme-color" content="#0c0e10" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#fdfcff" media="(prefers-color-scheme: light)" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
+  <!--
+    Apply the saved theme preference before Angular boots so the first paint
+    matches the user's choice (prevents a flash of the wrong palette).
+  -->
+  <script>
+    (function () {
+      try {
+        var raw = localStorage.getItem('va-settings');
+        if (!raw) return;
+        var parsed = JSON.parse(raw);
+        if (parsed && (parsed.theme === 'light' || parsed.theme === 'dark')) {
+          document.documentElement.setAttribute('data-theme', parsed.theme);
+        }
+      } catch (e) {
+        /* ignore */
+      }
+    })();
+  </script>
+</head>
+<body class="bg-background text-on-surface font-body antialiased">
+  <va-root></va-root>
+</body>
+</html>

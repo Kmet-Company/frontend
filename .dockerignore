@@ -1,0 +1,17 @@
+node_modules
+dist
+.angular
+.git
+.gitignore
+.vscode
+.idea
+*.log
+npm-debug.log*
+stitch_design
+README.md
+Dockerfile
+.dockerignore
+.env
+.env.*
+coverage
+.DS_Store

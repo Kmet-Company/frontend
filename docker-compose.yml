@@ -1,0 +1,7 @@
+services:
+  web:
+    image: vigilant-architect:latest
+    container_name: vigilant-architect
+    ports:
+      - "8080:80"
+    restart: unless-stopped

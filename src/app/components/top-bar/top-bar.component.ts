@@ -1,0 +1,144 @@
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
+
+import { AlertsService } from '../../services/alerts.service';
+
+@Component({
+  selector: 'va-top-bar',
+  standalone: true,
+  imports: [],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <header
+      class="w-full sticky top-0 z-40 bg-surface-container flex justify-between items-center px-6 h-16 font-headline"
+    >
+      <!-- Left: logo + name. We handle the click manually so that clicking the
+           logo while already on the dashboard still resets view mode + selection
+           (router links are no-ops on the current route). -->
+      <button
+        type="button"
+        (click)="onLogoClick()"
+        class="flex items-center gap-3 min-w-0 rounded-lg px-1 -mx-1 hover:bg-surface-container-high transition-colors text-left"
+        title="Go to Live Dashboard"
+      >
+        <span
+          class="w-9 h-9 rounded-lg bg-primary-container text-primary flex items-center justify-center flex-shrink-0"
+        >
+          <span class="material-symbols-outlined sym-fill text-[20px]">shield_person</span>
+        </span>
+        <div class="leading-tight min-w-0">
+          <div class="text-base font-bold tracking-tight text-on-surface truncate">
+            Vigilant Architect
+          </div>
+          <div class="text-[10px] uppercase tracking-widest text-on-surface-variant truncate">
+            Venue Operations
+          </div>
+        </div>
+      </button>
+
+      <!-- Right: shift · clock · notifications · avatar -->
+      <div class="flex items-center gap-3">
+        <div
+          class="hidden md:flex items-center gap-2 px-3 h-9 rounded-lg bg-surface-container-low text-xs text-on-surface-variant"
+          [title]="shiftTitle()"
+        >
+          <span class="w-2 h-2 rounded-full bg-primary animate-soft-pulse"></span>
+          <span class="tracking-wide">Shift: {{ shift() }}</span>
+        </div>
+
+        <div
+          class="hidden sm:flex items-center gap-2 px-3 h-9 rounded-lg bg-surface-container-low font-mono text-on-surface tabular-nums"
+          title="Local venue time"
+        >
+          <span class="material-symbols-outlined text-[18px] text-on-surface-variant"
+            >schedule</span
+          >
+          <span class="text-base font-semibold tracking-tight">{{ clock() }}</span>
+        </div>
+
+        <button
+          type="button"
+          class="relative p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded-lg transition-colors"
+          title="Notifications"
+        >
+          <span class="material-symbols-outlined">notifications</span>
+          @if (alerts.activeAlertCount() > 0) {
+            <span
+              class="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-error text-on-error text-[9px] font-bold flex items-center justify-center"
+              >{{ alerts.activeAlertCount() }}</span
+            >
+          }
+        </button>
+
+        <div
+          class="w-9 h-9 rounded-full bg-surface-container-highest overflow-hidden flex items-center justify-center text-sm font-bold text-on-surface-variant"
+          title="Mia Chen · Operations Lead"
+        >
+          MC
+        </div>
+      </div>
+    </header>
+  `,
+})
+export class TopBarComponent {
+  protected readonly alerts = inject(AlertsService);
+  private readonly router = inject(Router);
+  protected readonly clock = signal<string>(this.formatNow());
+  protected readonly shift = signal<string>(this.computeShiftLabel());
+  protected readonly shiftTitle = signal<string>(this.computeShiftTitle());
+
+  constructor() {
+    // Refresh the clock + shift label periodically. 30s is fine because the
+    // shift label only changes on hour-of-day boundaries.
+    setInterval(() => {
+      this.clock.set(this.formatNow());
+      this.shift.set(this.computeShiftLabel());
+      this.shiftTitle.set(this.computeShiftTitle());
+    }, 30_000);
+  }
+
+  protected onLogoClick(): void {
+    // Always drop back to the default "scanning the room" state, even if we're
+    // already on the live dashboard route.
+    this.alerts.resetDashboardView();
+    void this.router.navigateByUrl('/');
+  }
+
+  private formatNow(): string {
+    const d = new Date();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  }
+
+  /** Returns e.g. "Friday · Night" based on the current local time. */
+  private computeShiftLabel(): string {
+    const d = new Date();
+    const weekday = d.toLocaleDateString(undefined, { weekday: 'long' });
+    return `${weekday} · ${this.partOfDay(d.getHours())}`;
+  }
+
+  private computeShiftTitle(): string {
+    const d = new Date();
+    const date = d.toLocaleDateString(undefined, {
+      weekday: 'long',
+      month: 'short',
+      day: 'numeric',
+    });
+    return `${date} · ${this.partOfDay(d.getHours())} shift`;
+  }
+
+  /**
+   * Buckets the hour of day into the shift terms staff actually use:
+   *  - Morning   06:00 - 11:59
+   *  - Afternoon 12:00 - 16:59
+   *  - Evening   17:00 - 21:59
+   *  - Night     22:00 - 05:59
+   */
+  private partOfDay(hour: number): 'Morning' | 'Afternoon' | 'Evening' | 'Night' {
+    if (hour >= 6 && hour < 12) return 'Morning';
+    if (hour >= 12 && hour < 17) return 'Afternoon';
+    if (hour >= 17 && hour < 22) return 'Evening';
+    return 'Night';
+  }
+}

@@ -1,0 +1,281 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Theme tokens as CSS custom properties.
+ *
+ * Stored as space-separated RGB triplets so Tailwind can compose them with
+ * alpha modifiers, e.g. bg-primary/40. The defaults are the dark palette; a
+ * prefers-color-scheme: light media query flips them for users whose OS /
+ * browser is set to light mode.
+ */
+:root {
+  color-scheme: dark;
+
+  --color-surface-container-lowest: 0 0 0;
+  --color-surface-container-low: 17 20 22;
+  --color-surface: 12 14 16;
+  --color-surface-dim: 12 14 16;
+  --color-surface-container: 22 26 30;
+  --color-surface-container-high: 27 32 37;
+  --color-surface-container-highest: 32 38 44;
+  --color-surface-variant: 32 38 44;
+  --color-surface-bright: 37 45 51;
+  --color-surface-tint: 173 203 218;
+  --color-background: 12 14 16;
+  --color-on-background: 224 230 237;
+  --color-on-surface: 224 230 237;
+  --color-on-surface-variant: 166 172 178;
+  --color-inverse-surface: 249 249 252;
+  --color-inverse-on-surface: 83 85 87;
+  --color-outline: 112 118 124;
+  --color-outline-variant: 66 73 78;
+
+  --color-primary: 173 203 218;
+  --color-primary-dim: 159 189 204;
+  --color-primary-container: 46 75 87;
+  --color-on-primary: 39 68 81;
+  --color-on-primary-container: 183 213 229;
+  --color-inverse-primary: 70 99 112;
+
+  --color-secondary: 218 141 16;
+  --color-secondary-dim: 218 141 16;
+  --color-secondary-container: 86 52 0;
+  --color-on-secondary: 49 27 0;
+  --color-on-secondary-container: 255 175 64;
+
+  --color-tertiary: 255 113 103;
+  --color-tertiary-dim: 255 113 103;
+  --color-tertiary-container: 253 80 73;
+  --color-on-tertiary: 74 0 3;
+  --color-on-tertiary-container: 31 0 1;
+
+  --color-error: 238 125 119;
+  --color-error-dim: 187 85 81;
+  --color-error-container: 127 41 39;
+  --color-on-error: 73 1 6;
+  --color-on-error-container: 255 153 147;
+
+  /* Scrollbar tints that track the theme. */
+  --scrollbar-thumb: 32 38 44;
+  --scrollbar-thumb-hover: 43 51 58;
+}
+
+/*
+ * Light palette values reused by the OS media query and the explicit
+ * data-theme="light" override. When the user has picked "System" (the
+ * default), the media query applies; when they've picked a specific theme
+ * in Settings, the higher-specificity [data-theme=...] rules win.
+ */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    color-scheme: light;
+
+    --color-surface-container-lowest: 255 255 255;
+    --color-surface-container-low: 244 247 250;
+    --color-surface: 253 252 255;
+    --color-surface-dim: 220 222 227;
+    --color-surface-container: 237 239 244;
+    --color-surface-container-high: 231 234 240;
+    --color-surface-container-highest: 223 226 232;
+    --color-surface-variant: 221 227 234;
+    --color-surface-bright: 253 252 255;
+    --color-surface-tint: 62 107 126;
+    --color-background: 253 252 255;
+    --color-on-background: 23 28 31;
+    --color-on-surface: 23 28 31;
+    --color-on-surface-variant: 65 72 77;
+    --color-inverse-surface: 44 49 53;
+    --color-inverse-on-surface: 238 241 245;
+    --color-outline: 113 120 126;
+    --color-outline-variant: 193 199 206;
+
+    --color-primary: 62 107 126;
+    --color-primary-dim: 48 85 102;
+    --color-primary-container: 193 232 253;
+    --color-on-primary: 255 255 255;
+    --color-on-primary-container: 0 30 42;
+    --color-inverse-primary: 166 204 223;
+
+    --color-secondary: 134 84 26;
+    --color-secondary-dim: 122 77 24;
+    --color-secondary-container: 255 221 183;
+    --color-on-secondary: 255 255 255;
+    --color-on-secondary-container: 43 23 0;
+
+    --color-tertiary: 190 60 54;
+    --color-tertiary-dim: 166 51 46;
+    --color-tertiary-container: 255 218 213;
+    --color-on-tertiary: 255 255 255;
+    --color-on-tertiary-container: 65 0 1;
+
+    --color-error: 186 26 26;
+    --color-error-dim: 154 21 21;
+    --color-error-container: 255 218 214;
+    --color-on-error: 255 255 255;
+    --color-on-error-container: 65 0 2;
+
+    --scrollbar-thumb: 199 205 213;
+    --scrollbar-thumb-hover: 170 177 187;
+  }
+}
+
+/* Explicit "Light" preference from Settings: always light regardless of OS. */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --color-surface-container-lowest: 255 255 255;
+  --color-surface-container-low: 244 247 250;
+  --color-surface: 253 252 255;
+  --color-surface-dim: 220 222 227;
+  --color-surface-container: 237 239 244;
+  --color-surface-container-high: 231 234 240;
+  --color-surface-container-highest: 223 226 232;
+  --color-surface-variant: 221 227 234;
+  --color-surface-bright: 253 252 255;
+  --color-surface-tint: 62 107 126;
+  --color-background: 253 252 255;
+  --color-on-background: 23 28 31;
+  --color-on-surface: 23 28 31;
+  --color-on-surface-variant: 65 72 77;
+  --color-inverse-surface: 44 49 53;
+  --color-inverse-on-surface: 238 241 245;
+  --color-outline: 113 120 126;
+  --color-outline-variant: 193 199 206;
+
+  --color-primary: 62 107 126;
+  --color-primary-dim: 48 85 102;
+  --color-primary-container: 193 232 253;
+  --color-on-primary: 255 255 255;
+  --color-on-primary-container: 0 30 42;
+  --color-inverse-primary: 166 204 223;
+
+  --color-secondary: 134 84 26;
+  --color-secondary-dim: 122 77 24;
+  --color-secondary-container: 255 221 183;
+  --color-on-secondary: 255 255 255;
+  --color-on-secondary-container: 43 23 0;
+
+  --color-tertiary: 190 60 54;
+  --color-tertiary-dim: 166 51 46;
+  --color-tertiary-container: 255 218 213;
+  --color-on-tertiary: 255 255 255;
+  --color-on-tertiary-container: 65 0 1;
+
+  --color-error: 186 26 26;
+  --color-error-dim: 154 21 21;
+  --color-error-container: 255 218 214;
+  --color-on-error: 255 255 255;
+  --color-on-error-container: 65 0 2;
+
+  --scrollbar-thumb: 199 205 213;
+  --scrollbar-thumb-hover: 170 177 187;
+}
+
+/* Explicit "Dark" preference from Settings: always dark even when OS is light. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-surface-container-lowest: 0 0 0;
+  --color-surface-container-low: 17 20 22;
+  --color-surface: 12 14 16;
+  --color-surface-dim: 12 14 16;
+  --color-surface-container: 22 26 30;
+  --color-surface-container-high: 27 32 37;
+  --color-surface-container-highest: 32 38 44;
+  --color-surface-variant: 32 38 44;
+  --color-surface-bright: 37 45 51;
+  --color-surface-tint: 173 203 218;
+  --color-background: 12 14 16;
+  --color-on-background: 224 230 237;
+  --color-on-surface: 224 230 237;
+  --color-on-surface-variant: 166 172 178;
+  --color-inverse-surface: 249 249 252;
+  --color-inverse-on-surface: 83 85 87;
+  --color-outline: 112 118 124;
+  --color-outline-variant: 66 73 78;
+
+  --color-primary: 173 203 218;
+  --color-primary-dim: 159 189 204;
+  --color-primary-container: 46 75 87;
+  --color-on-primary: 39 68 81;
+  --color-on-primary-container: 183 213 229;
+  --color-inverse-primary: 70 99 112;
+
+  --color-secondary: 218 141 16;
+  --color-secondary-dim: 218 141 16;
+  --color-secondary-container: 86 52 0;
+  --color-on-secondary: 49 27 0;
+  --color-on-secondary-container: 255 175 64;
+
+  --color-tertiary: 255 113 103;
+  --color-tertiary-dim: 255 113 103;
+  --color-tertiary-container: 253 80 73;
+  --color-on-tertiary: 74 0 3;
+  --color-on-tertiary-container: 31 0 1;
+
+  --color-error: 238 125 119;
+  --color-error-dim: 187 85 81;
+  --color-error-container: 127 41 39;
+  --color-on-error: 73 1 6;
+  --color-on-error-container: 255 153 147;
+
+  --scrollbar-thumb: 32 38 44;
+  --scrollbar-thumb-hover: 43 51 58;
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: rgb(var(--color-background));
+    color: rgb(var(--color-on-surface));
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: 'Manrope', sans-serif;
+    letter-spacing: -0.02em;
+  }
+
+  /* Soft scrollbar that doesn't shout */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: rgb(var(--scrollbar-thumb));
+    border-radius: 8px;
+    border: 2px solid rgb(var(--color-background));
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(var(--scrollbar-thumb-hover));
+  }
+}
+
+@layer components {
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    user-select: none;
+  }
+
+  .sym-fill {
+    font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider;
+  }
+}
