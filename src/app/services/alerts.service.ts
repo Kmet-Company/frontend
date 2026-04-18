@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { catchError, of } from 'rxjs';
+import { catchError, of, timer } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
 
 import {
   AlertSeverity,
@@ -542,9 +543,18 @@ export class AlertsService {
       .pipe(catchError((err) => this.logAndEmpty('getAlertHistory', err)))
       .subscribe((rows) => rows && this._history.set(rows));
 
-    this.api
-      .getGuestReports()
-      .pipe(catchError((err) => this.logAndEmpty('getGuestReports', err)))
+    // Guest reports poll every 10s so reports submitted from the mobile
+    // app appear without a page refresh. Optimistic writes (acknowledge /
+    // dismiss) still mutate the signal locally first, but the poll will
+    // reconcile with the server state.
+    timer(0, 10_000)
+      .pipe(
+        switchMap(() =>
+          this.api
+            .getGuestReports()
+            .pipe(catchError((err) => this.logAndEmpty('getGuestReports', err))),
+        ),
+      )
       .subscribe((rows) => rows && this._guestReports.set(rows));
   }
 
