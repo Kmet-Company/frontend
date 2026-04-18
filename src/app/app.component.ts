@@ -11,11 +11,11 @@ import { SettingsService } from './services/settings.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterOutlet, TopBarComponent, SideNavComponent],
   template: `
-    <div class="min-h-screen flex flex-col bg-background text-on-surface">
+    <div class="h-screen flex flex-col bg-background text-on-surface overflow-hidden">
       <va-top-bar />
-      <div class="flex flex-1 overflow-hidden">
+      <div class="flex flex-1 min-h-0 overflow-hidden">
         <va-side-nav />
-        <div class="flex-1 overflow-hidden">
+        <div class="flex-1 min-w-0 min-h-0 overflow-hidden">
           <router-outlet />
         </div>
       </div>
