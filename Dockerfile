@@ -25,7 +25,9 @@ COPY --from=build /app/dist/vigilant-architect/browser /usr/share/nginx/html
 
 EXPOSE 80
 
+# BusyBox's wget on nginx:alpine flakes on `--spider`, so do a real GET to
+# /dev/null instead. Redirect both stdout + stderr to keep the check silent.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
-  CMD wget --quiet --tries=1 --spider http://localhost/ || exit 1
+  CMD wget -q -O /dev/null http://localhost/ >/dev/null 2>&1 || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]
