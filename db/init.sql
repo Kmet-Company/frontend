@@ -189,6 +189,7 @@ CREATE TABLE guest_report (
   location            TEXT                    NOT NULL,
 
   guest_handle        TEXT                    NOT NULL,          -- "Anonymous" / "Guest #A47"
+  guest_email         TEXT                    NOT NULL DEFAULT '',
   guest_device_id     TEXT,                                      -- opaque device fingerprint, optional
 
   submitted_at        TIMESTAMPTZ             NOT NULL DEFAULT now(),
@@ -528,29 +529,30 @@ FROM alert a WHERE a.reference = '403';
 -- -------- Guest reports --------
 INSERT INTO guest_report (
   venue_id, reference, kind, title, message, location,
-  guest_handle, submitted_at, status, priority
+  guest_handle, guest_email, submitted_at, status, priority
 )
 SELECT v.id, g.reference, g.kind::guest_report_kind, g.title, g.message, g.location,
-       g.guest_handle, now() - (g.minutes_ago || ' minutes')::interval,
+       g.guest_handle, g.guest_email,
+       now() - (g.minutes_ago || ' minutes')::interval,
        g.status::guest_report_status, g.priority::guest_report_priority
 FROM   venue v
 JOIN (VALUES
   ('GR-8421', 'medical',    'Friend feels faint',
               'My friend is feeling dizzy and needs somewhere to sit — we''re near the main bar on the right.',
-              'Main Bar · right side', 'Guest · Alex K.', 1, 'new', 'high'),
+              'Main Bar · right side', 'Guest · Alex K.', 'alex.k@guestmail.com', 1, 'new', 'high'),
   ('GR-8420', 'safety',     'Feeling unsafe near stage',
               'A group of guys keeps pushing and it''s getting aggressive in the pit left of the stage.',
-              'Main Stage · front-left', 'Anonymous', 4, 'new', 'high'),
+              'Main Stage · front-left', 'Anonymous', 'anonymous-8420@guestmail.com', 4, 'new', 'high'),
   ('GR-8419', 'hazard',     'Wet floor in restrooms',
               'Someone spilled a drink outside the women''s restrooms on the 2nd floor. People are slipping.',
-              '2F Restrooms', 'Guest · Priya M.', 8, 'acknowledged', 'medium'),
+              '2F Restrooms', 'Guest · Priya M.', 'priya.m@guestmail.com', 8, 'acknowledged', 'medium'),
   ('GR-8418', 'lost_item',  'Lost black jacket',
               'I think I left my black jacket near the cloakroom around 11pm. Phone in the pocket.',
-              'Cloakroom', 'Guest · Lina T.', 15, 'new', 'low'),
+              'Cloakroom', 'Guest · Lina T.', 'lina.t@guestmail.com', 15, 'new', 'low'),
   ('GR-8417', 'harassment', 'Being followed by a stranger',
               'A guy keeps following me around the venue and won''t leave me alone. Currently near the stage-right exit.',
-              'Stage · right exit', 'Guest #A47', 2, 'new', 'high')
-) AS g(reference, kind, title, message, location, guest_handle, minutes_ago, status, priority)
+              'Stage · right exit', 'Guest #A47', 'a47@guestmail.com', 2, 'new', 'high')
+) AS g(reference, kind, title, message, location, guest_handle, guest_email, minutes_ago, status, priority)
   ON TRUE
 WHERE v.code = 'foundry-north-hall';
 

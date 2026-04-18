@@ -49,6 +49,13 @@ services:
       PGRST_SERVER_PORT: 3000
     expose:
       - "3000"
+    # Local dev: expose PostgREST on the host so the Android app (emulator
+    # via 10.0.2.2, or a physical device via the host's LAN / Tailscale IP)
+    # can POST guest reports directly. Bound on all interfaces for dev
+    # convenience — remove or restrict for shared machines.
+    # Production traffic still goes through nginx /api/ in the `web` service.
+    ports:
+      - "3001:3000"
     networks: [vigilant-net]
 
   gateway:
@@ -90,6 +97,11 @@ services:
       - gateway
     environment:
       API_URL: http://api:3000
+    # Local dev: expose the Angular SPA on http://localhost:8080 so we can
+    # open the dashboard without Traefik. Production still routes via
+    # Traefik on :443.
+    ports:
+      - "8080:80"
     # Traefik's docker provider skips containers whose health status isn't
     # `healthy`. The Dockerfile's wget-based healthcheck has been flaky on
     # BusyBox and leaves the container stuck in `starting`, so disable it
