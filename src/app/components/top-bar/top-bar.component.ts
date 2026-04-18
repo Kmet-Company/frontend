@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 
 import { AlertsService } from '../../services/alerts.service';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'va-top-bar',
@@ -70,22 +71,33 @@ import { AlertsService } from '../../services/alerts.service';
           }
         </button>
 
-        <div
-          class="w-9 h-9 rounded-full bg-surface-container-highest overflow-hidden flex items-center justify-center text-sm font-bold text-on-surface-variant"
-          title="Mia Chen · Operations Lead"
+        <button
+          type="button"
+          (click)="auth.openAccount()"
+          class="w-9 h-9 rounded-full bg-surface-container-highest overflow-hidden flex items-center justify-center text-sm font-bold text-on-surface-variant hover:text-on-surface hover:ring-2 hover:ring-primary/40 transition"
+          [title]="avatarTitle()"
         >
-          MC
-        </div>
+          {{ auth.initials() }}
+        </button>
       </div>
     </header>
   `,
 })
 export class TopBarComponent {
   protected readonly alerts = inject(AlertsService);
+  protected readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   protected readonly clock = signal<string>(this.formatNow());
   protected readonly shift = signal<string>(this.computeShiftLabel());
   protected readonly shiftTitle = signal<string>(this.computeShiftTitle());
+
+  /** "Mia Chen · Operations Lead" style tooltip for the avatar circle. */
+  protected readonly avatarTitle = computed(() => {
+    const user = this.auth.user();
+    if (!user) return 'Not signed in';
+    const suffix = user.title ?? user.roles[0] ?? user.username;
+    return suffix ? `${user.name} · ${suffix}` : user.name;
+  });
 
   constructor() {
     // Refresh the clock + shift label periodically. 30s is fine because the

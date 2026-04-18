@@ -7,6 +7,7 @@ import {
 import { RouterLink, RouterLinkActive } from '@angular/router';
 
 import { AlertsService } from '../../services/alerts.service';
+import { AuthService } from '../../services/auth.service';
 
 interface NavItem {
   label: string;
@@ -29,9 +30,9 @@ interface NavGroup {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <aside
-      class="hidden lg:flex flex-col h-full w-60 bg-surface-container-low font-body text-sm overflow-y-auto"
+      class="hidden lg:flex flex-col h-full w-60 bg-surface-container-low font-body text-sm overflow-hidden"
     >
-      <div class="px-6 pt-5 pb-3">
+      <div class="px-6 pt-5 pb-3 shrink-0">
         <div class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">
           Venue
         </div>
@@ -40,7 +41,7 @@ interface NavGroup {
         </div>
       </div>
 
-      <nav class="flex-1 px-3 pb-4 space-y-6">
+      <nav class="flex-1 min-h-0 overflow-y-auto px-3 pb-4 space-y-6">
         @for (group of groups; track group.label) {
           <div>
             <div
@@ -89,17 +90,27 @@ interface NavGroup {
         }
       </nav>
 
-      <div class="mt-auto px-3 pb-4 pt-2 space-y-1">
+      <div class="shrink-0 px-3 pb-4 pt-2 space-y-1 border-t border-outline-variant/40">
+        @if (auth.user(); as currentUser) {
+          <div class="px-3 py-2 text-[11px] text-on-surface-variant truncate" [title]="currentUser.email ?? currentUser.username">
+            Signed in as
+            <span class="block text-on-surface font-semibold truncate">{{ currentUser.name }}</span>
+          </div>
+        }
         <button
           type="button"
+          (click)="auth.openAccount()"
           class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors"
+          title="Manage your Keycloak account"
         >
           <span class="material-symbols-outlined text-[20px]">help</span>
           <span class="flex-1 text-left">Support</span>
         </button>
         <button
           type="button"
+          (click)="auth.logout()"
           class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors"
+          title="Sign out of Vigilant Architect"
         >
           <span class="material-symbols-outlined text-[20px]">logout</span>
           <span class="flex-1 text-left">Sign out</span>
@@ -110,6 +121,7 @@ interface NavGroup {
 })
 export class SideNavComponent {
   private readonly alerts = inject(AlertsService);
+  protected readonly auth = inject(AuthService);
   private readonly activeBadge = computed(() => {
     const count = this.alerts.activeAlertCount();
     return count > 0 ? String(count) : null;

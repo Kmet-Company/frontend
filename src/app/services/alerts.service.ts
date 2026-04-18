@@ -1,4 +1,5 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { catchError, of } from 'rxjs';
 
 import {
   AlertSeverity,
@@ -15,13 +16,25 @@ import {
   StaffStatus,
   VenueAlert,
 } from '../models/venue.models';
+import { ApiService } from './api.service';
 
 /**
- * Mock operational data for the venue safety dashboard. In a production build
- * this service would subscribe to a websocket / REST backend instead.
+ * Operational state for the venue safety dashboard.
+ *
+ * Cameras / alerts / history / guest reports are served by PostgREST. On
+ * construction the service fetches each collection once and populates its
+ * signals; subsequent writes (confirm / dismiss / escalate / acknowledge /
+ * note) are applied optimistically to the signal AND posted to the DB so
+ * they survive a refresh.
+ *
+ * `_staff` is still in-memory because staff identity is managed by Keycloak;
+ * the Postgres `staff_presence` table only stores shift + zone by user id
+ * and will be wired up once Keycloak is live.
  */
 @Injectable({ providedIn: 'root' })
 export class AlertsService {
+  private readonly api = inject(ApiService);
+
   private readonly _cameras = signal<CameraFeed[]>([
     {
       id: 'cam-main',
@@ -504,6 +517,43 @@ export class AlertsService {
   readonly viewMode = this._viewMode.asReadonly();
   readonly toast = this._toast.asReadonly();
 
+  constructor() {
+    this.hydrateFromApi();
+  }
+
+  /**
+   * Initial load of cameras, alerts, history and guest reports from
+   * PostgREST. Each request is independent; if one fails the others still
+   * populate. Errors are logged but not surfaced in the UI.
+   */
+  private hydrateFromApi(): void {
+    this.api
+      .getCameras()
+      .pipe(catchError((err) => this.logAndEmpty('getCameras', err)))
+      .subscribe((rows) => rows && this._cameras.set(rows));
+
+    this.api
+      .getActiveAlerts()
+      .pipe(catchError((err) => this.logAndEmpty('getActiveAlerts', err)))
+      .subscribe((rows) => rows && this._alerts.set(rows));
+
+    this.api
+      .getAlertHistory()
+      .pipe(catchError((err) => this.logAndEmpty('getAlertHistory', err)))
+      .subscribe((rows) => rows && this._history.set(rows));
+
+    this.api
+      .getGuestReports()
+      .pipe(catchError((err) => this.logAndEmpty('getGuestReports', err)))
+      .subscribe((rows) => rows && this._guestReports.set(rows));
+  }
+
+  private logAndEmpty(source: string, err: unknown) {
+    // eslint-disable-next-line no-console
+    console.warn(`[AlertsService] ${source} failed`, err);
+    return of(null);
+  }
+
   readonly staffOnShiftCount = computed(
     () => this._staff().filter((s) => s.status === 'on_shift').length,
   );
@@ -638,59 +688,75 @@ export class AlertsService {
   }
 
   requestBackup(id: string): void {
-    this.appendEvent(id, {
+    const event: IncidentEvent = {
       at: new Date(),
       kind: 'dispatch',
       title: 'Backup requested',
       description: 'Additional floor team dispatched to location.',
-    });
+    };
+    this.appendEvent(id, event);
+    this.persistEvent(id, event);
     this.showToast('Backup requested');
   }
 
   addNote(id: string, author: string, text: string): void {
-    if (!text.trim()) return;
-    const update = (list: VenueAlert[]): VenueAlert[] =>
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    const note: ResponseNote = {
+      author,
+      at: new Date(),
+      text: trimmed,
+      kind: 'note',
+    };
+    const applyNote = (list: VenueAlert[]): VenueAlert[] =>
       list.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              notes: [
-                ...item.notes,
-                { author, at: new Date(), text: text.trim(), kind: 'note' },
-              ],
-            }
-          : item,
+        item.id === id ? { ...item, notes: [...item.notes, note] } : item,
       );
-    this._alerts.set(update(this._alerts()));
-    this._history.set(update(this._history()));
+    this._alerts.set(applyNote(this._alerts()));
+    this._history.set(applyNote(this._history()));
+
+    this.api
+      .addAlertNote(id, { author, text: trimmed, kind: 'note' })
+      .pipe(catchError((err) => this.logAndEmpty('addAlertNote', err)))
+      .subscribe();
+
     this.showToast('Note added to response log');
   }
 
   /**
    * Acknowledging a guest report promotes it into a full active alert so it
-   * shows up alongside operator-visible incidents. The guest-side record is
-   * marked resolved so it disappears from the "open guest reports" panel —
-   * the operator now tracks it via the alert timeline.
+   * shows up alongside operator-visible incidents. Three writes land in the
+   * DB: a new `alert` row (source=guest_report), a `confirmation` event on
+   * that alert, and a patch on the original `guest_report` to mark it
+   * resolved + link it back to the new alert.
    *
-   * Returns the newly created alert (or null if the report wasn't found or
-   * was already promoted).
+   * The return value exists for API symmetry — existing callers ignore it.
    */
   acknowledgeGuestReport(id: string): VenueAlert | null {
     const report = this._guestReports().find((r) => r.id === id);
     if (!report || report.status === 'resolved') return null;
 
     const now = new Date();
+    const tempId = `pending-${report.id}`;
+    // Promoted alerts keep the guest report's reference (e.g. "GR-8421")
+    // so operators can trace an alert back to the mobile submission.
+    const alertReference = report.reference;
+    const promotedTitle = `Guest report: ${report.title}`;
+    const severity = this.severityFromPriority(report.priority);
+    const risk = this.riskFromPriority(report.priority);
+
     const newAlert: VenueAlert = {
-      id: `alert-gr-${report.reference}`,
-      reference: `GR${report.reference}`,
-      title: `Guest report: ${report.title}`,
+      id: tempId,
+      reference: alertReference,
+      title: promotedTitle,
       description: report.message,
-      severity: this.severityFromPriority(report.priority),
-      risk: this.riskFromPriority(report.priority),
+      severity,
+      risk,
       confidence: 70,
       location: report.location,
       zone: report.location,
-      cameraId: this.cameras()[0]?.id ?? 'cam-main',
+      cameraId: this.cameras()[0]?.id ?? '',
       detectedAt: report.submittedAt,
       previewUrl: '',
       status: 'active',
@@ -712,31 +778,104 @@ export class AlertsService {
       notes: [],
     };
 
+    // Optimistic local state.
     this._alerts.update((list) => [newAlert, ...list]);
-    this.updateGuestReport(id, 'resolved');
+    this.setGuestReportStatusLocal(id, 'resolved');
     this.showToast('Report promoted to active alert');
+
+    // Persist. When the alert POST returns we know its real UUID, so swap
+    // the temp id locally and follow up with the event + guest-report patch.
+    this.api
+      .getDefaultVenueId()
+      .subscribe((venueId) => {
+        if (!venueId) {
+          console.warn('[AlertsService] no venue id available, skipping DB persist');
+          return;
+        }
+        this.api
+          .createAlertFromGuestReport({
+            venueId,
+            reference: alertReference,
+            title: promotedTitle,
+            description: report.message,
+            severity,
+            risk,
+            confidence: 70,
+            location: report.location,
+            zone: report.location,
+            sourceGuestReportId: report.id,
+          })
+          .pipe(
+            catchError((err) =>
+              this.logAndEmpty('createAlertFromGuestReport', err),
+            ),
+          )
+          .subscribe((created) => {
+            if (!created) return;
+
+            this._alerts.update((list) =>
+              list.map((a) =>
+                a.id === tempId ? { ...a, id: created.id } : a,
+              ),
+            );
+
+            this.api
+              .addAlertEvent(created.id, {
+                kind: 'confirmation',
+                title: 'Acknowledged by operator',
+                description: `Promoted from guest report ${report.reference} to active alert.`,
+              })
+              .pipe(
+                catchError((err) =>
+                  this.logAndEmpty('addAlertEvent (promotion)', err),
+                ),
+              )
+              .subscribe();
+
+            this.api
+              .updateGuestReportStatus(report.id, {
+                status: 'resolved',
+                promoted_alert_id: created.id,
+              })
+              .pipe(
+                catchError((err) =>
+                  this.logAndEmpty('updateGuestReportStatus', err),
+                ),
+              )
+              .subscribe();
+          });
+      });
+
     return newAlert;
   }
 
   /**
    * Dismiss a guest report without promoting it — e.g. duplicate report or
-   * non-actionable. The record is archived (status → resolved) and removed
-   * from the open guest-report panel.
+   * non-actionable. The record is archived (status → resolved) in the DB
+   * and removed from the open guest-report panel.
    */
   dismissGuestReport(id: string): void {
     const report = this._guestReports().find((r) => r.id === id);
     if (!report) return;
-    this.updateGuestReport(id, 'resolved');
+
+    this.setGuestReportStatusLocal(id, 'resolved');
+    this.api
+      .updateGuestReportStatus(id, { status: 'resolved' })
+      .pipe(catchError((err) => this.logAndEmpty('dismissGuestReport', err)))
+      .subscribe();
+
     this.showToast('Guest report dismissed');
   }
 
   /**
    * Append a timeline event to an existing alert (active or archived).
-   * Exposed publicly so sibling services (e.g. EscalationService) can attach
-   * their actions to an alert's history without reaching into private state.
+   * Persists to the DB. Exposed publicly so sibling services (e.g.
+   * EscalationService) can attach their actions to an alert's history.
    */
   addIncidentEvent(alertId: string, event: Omit<IncidentEvent, 'at'>): void {
-    this.appendEvent(alertId, { ...event, at: new Date() });
+    const full: IncidentEvent = { ...event, at: new Date() };
+    this.appendEvent(alertId, full);
+    this.persistEvent(alertId, full);
   }
 
   private severityFromPriority(priority: GuestReportPriority): AlertSeverity {
@@ -801,14 +940,12 @@ export class AlertsService {
     );
   }
 
-  private updateGuestReport(
+  private setGuestReportStatusLocal(
     id: string,
     status: GuestReport['status'],
   ): void {
     this._guestReports.set(
-      this._guestReports().map((r) =>
-        r.id === id ? { ...r, status } : r,
-      ),
+      this._guestReports().map((r) => (r.id === id ? { ...r, status } : r)),
     );
   }
 
@@ -821,6 +958,18 @@ export class AlertsService {
       );
     this._alerts.set(update(this._alerts()));
     this._history.set(update(this._history()));
+  }
+
+  /** Persist a timeline event to the DB (fire and forget). */
+  private persistEvent(alertId: string, event: IncidentEvent): void {
+    this.api
+      .addAlertEvent(alertId, {
+        kind: event.kind,
+        title: event.title,
+        description: event.description,
+      })
+      .pipe(catchError((err) => this.logAndEmpty('addAlertEvent', err)))
+      .subscribe();
   }
 
   private updateStatus(
@@ -857,6 +1006,13 @@ export class AlertsService {
         ),
       );
     }
+
+    // Persist — status patch + timeline event. Do not block the UI.
+    this.api
+      .updateAlertStatus(id, status)
+      .pipe(catchError((err) => this.logAndEmpty('updateAlertStatus', err)))
+      .subscribe();
+    this.persistEvent(id, eventWithTime);
   }
 
   /**
