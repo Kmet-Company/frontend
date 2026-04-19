@@ -7,7 +7,7 @@ export const routes: Routes = [
       import('./pages/dashboard/dashboard.component').then(
         (m) => m.DashboardComponent,
       ),
-    title: 'Live Dashboard · Vigilant Architect',
+    title: 'Live Dashboard · ViReAl',
   },
   {
     path: 'incidents',
@@ -15,7 +15,7 @@ export const routes: Routes = [
       import('./pages/incidents/incidents-list.component').then(
         (m) => m.IncidentsListComponent,
       ),
-    title: 'Incidents · Vigilant Architect',
+    title: 'Incidents · ViReAl',
   },
   {
     path: 'incidents/:id',
@@ -23,7 +23,7 @@ export const routes: Routes = [
       import('./pages/incidents/incident-detail.component').then(
         (m) => m.IncidentDetailComponent,
       ),
-    title: 'Incident · Vigilant Architect',
+    title: 'Incident · ViReAl',
   },
   {
     path: 'venue-map',
@@ -31,7 +31,7 @@ export const routes: Routes = [
       import('./pages/venue-map/venue-map.page').then(
         (m) => m.VenueMapPageComponent,
       ),
-    title: 'Venue Map · Vigilant Architect',
+    title: 'Venue Map · ViReAl',
   },
   {
     path: 'reports',
@@ -39,7 +39,7 @@ export const routes: Routes = [
       import('./pages/reports/reports-list.component').then(
         (m) => m.ReportsListComponent,
       ),
-    title: 'Reports · Vigilant Architect',
+    title: 'Reports · ViReAl',
   },
   {
     path: 'reports/:id',
@@ -47,7 +47,7 @@ export const routes: Routes = [
       import('./pages/reports/report-detail.component').then(
         (m) => m.ReportDetailComponent,
       ),
-    title: 'Report · Vigilant Architect',
+    title: 'Report · ViReAl',
   },
   {
     path: 'escalate',
@@ -55,7 +55,7 @@ export const routes: Routes = [
       import('./pages/escalate/escalate.component').then(
         (m) => m.EscalateComponent,
       ),
-    title: 'Escalate · Vigilant Architect',
+    title: 'Escalate · ViReAl',
   },
   {
     path: 'staff',
@@ -63,7 +63,7 @@ export const routes: Routes = [
       import('./pages/staff/staff-list.component').then(
         (m) => m.StaffListComponent,
       ),
-    title: 'Staff Roster · Vigilant Architect',
+    title: 'Staff Roster · ViReAl',
   },
   {
     path: 'settings',
@@ -71,7 +71,7 @@ export const routes: Routes = [
       import('./pages/settings/settings.component').then(
         (m) => m.SettingsComponent,
       ),
-    title: 'Settings · Vigilant Architect',
+    title: 'Settings · ViReAl',
   },
   { path: '**', redirectTo: '' },
 ];

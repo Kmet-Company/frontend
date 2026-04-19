@@ -1,5 +1,5 @@
 -- =============================================================================
--- Vigilant Architect — Postgres schema
+-- ViReAl — Postgres schema
 -- -----------------------------------------------------------------------------
 -- Mount this file at `/docker-entrypoint-initdb.d/init.sql` in the official
 -- `postgres:17` image and it will run on first boot of an empty data volume.

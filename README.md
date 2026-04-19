@@ -1,4 +1,4 @@
-# Vigilant Architect
+# ViReAl — Vision Recognition Alert
 
 A venue safety and event operations dashboard built with **Angular 18** and **Tailwind CSS**. The UI is designed for real human staff working live shifts at nightclubs, concerts, and festivals — calm, clear, and operational rather than futuristic or alarming.
 
@@ -10,7 +10,7 @@ A venue safety and event operations dashboard built with **Angular 18** and **Ta
 - **Venue map** — Inline SVG floor plan with heat zones (bar, stage, dance floor, lounge, entrance) and a simple legend.
 - **Interaction** — Clicking any alert or camera tile selects that camera (ring highlight). No flashing, no alarms — transitions are gentle.
 
-The visual system follows the *Operational Serenity* / *Vigilant Architect* design tokens defined in `stitch_design/DESIGN.md` (tonal dark surfaces, muted status colors, no hard 1px borders for sectioning, Manrope headlines + Inter body).
+The visual system follows the *Operational Serenity* / *ViReAl* design tokens defined in `stitch_design/DESIGN.md` (tonal dark surfaces, muted status colors, no hard 1px borders for sectioning, Manrope headlines + Inter body).
 
 ## Project structure
 
@@ -51,8 +51,8 @@ The dev server listens on `http://localhost:4200`.
 Build and run the production image:
 
 ```bash
-docker build -t vigilant-architect .
-docker run --rm -p 8080:80 vigilant-architect
+docker build -t vireal .
+docker run --rm -p 8080:80 vireal
 ```
 
 Or use Compose:
@@ -63,7 +63,7 @@ docker compose up --build
 
 Then open <http://localhost:8080>.
 
-The multi-stage `Dockerfile` builds the Angular bundle in `node:20-alpine` and serves the static `dist/vigilant-architect/browser` output through `nginx:1.27-alpine` with SPA history-API fallback, gzip, sane cache headers, and basic security headers (see `nginx.conf`).
+The multi-stage `Dockerfile` builds the Angular bundle in `node:20-alpine` and serves the static `dist/vireal/browser` output through `nginx:1.27-alpine` with SPA history-API fallback, gzip, sane cache headers, and basic security headers (see `nginx.conf`).
 
 ## Design philosophy
 

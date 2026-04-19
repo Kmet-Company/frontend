@@ -1,7 +1,7 @@
 {
-  "name": "vigilant-architect",
+  "name": "vireal",
   "version": "0.1.0",
-  "description": "Vigilant Architect - venue safety & event operations dashboard",
+  "description": "ViReAl (Vision Recognition Alert) - venue safety & event operations dashboard",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
