@@ -45,6 +45,13 @@ export class AuthService {
     clientId: 'vireal-web',
   };
 
+  /**
+   * When true (default), skip Keycloak on loopback + dev ports so Docker / ng
+   * serve work without registering redirect URIs on auth.vireal.club. Set to
+   * false once Keycloak "Valid redirect URIs" includes your local origin.
+   */
+  static bypassKeycloakOnLoopback = true;
+
   private readonly _user = signal<AuthUser | null>(null);
   /** Current signed-in user, or null while the OIDC handshake is running. */
   readonly user = this._user.asReadonly();
@@ -73,6 +80,11 @@ export class AuthService {
    * `user` from the ID token.
    */
   async init(): Promise<void> {
+    if (AuthService.bypassKeycloakOnLoopback && shouldBypassKeycloakForLocalOrigin()) {
+      this.setLoopbackDevUser();
+      return;
+    }
+
     const kc = new Keycloak({
       url: AuthService.config.url,
       realm: AuthService.config.realm,
@@ -171,4 +183,24 @@ export class AuthService {
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }
+
+  private setLoopbackDevUser(): void {
+    this._user.set({
+      username: 'local-dev',
+      name: 'Local Dev',
+      initials: 'LD',
+      email: null,
+      roles: ['operator'],
+      title: null,
+      callSign: null,
+    });
+  }
+}
+
+function shouldBypassKeycloakForLocalOrigin(): boolean {
+  if (typeof window === 'undefined') return false;
+  const { hostname, port } = window.location;
+  const loopback = hostname === 'localhost' || hostname === '127.0.0.1';
+  const devPort = port === '8100' || port === '4200';
+  return loopback && devPort;
 }

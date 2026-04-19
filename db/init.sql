@@ -330,11 +330,11 @@ INSERT INTO camera (venue_id, code, label, zone, icon, image_url, video_url, occ
 SELECT v.id, c.code, c.label, c.zone, c.icon, c.image_url, c.video_url, c.occupancy, c.density::camera_density
 FROM   venue v
 JOIN   (VALUES
-  -- video_url paths are served from Angular `public/` → same-origin `/file.mp4`
-  ('cam-main',     'Main Floor',     'Dance Floor', 'layers',         'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&w=1200&q=70', '/cam-main.mp4',     612, 'high'),
-  ('cam-bar',      'Bar Area',       'Main Bar',    'local_bar',      'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=1200&q=70', '/cam-main.mp4', 184, 'medium'),
-  ('cam-entrance', 'Entrance Queue', 'Front Door',  'groups',         'https://images.unsplash.com/photo-1493676304819-0d7a8d026dcf?auto=format&fit=crop&w=1200&q=70', '/kocani.mp4',    96, 'medium'),
-  ('cam-stage',    'Stage Crowd',    'Main Stage',  'theater_comedy', 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?auto=format&fit=crop&w=1200&q=70', '/black_and_white.mp4', 842, 'high')
+  -- video_url / image_url: same-origin paths only (no CDN) so local Docker matches hosted assets.
+  ('cam-main',     'Main Floor',     'Dance Floor', 'layers',         NULL, '/cam-main.mp4',        612, 'high'),
+  ('cam-bar',      'Bar Area',       'Main Bar',    'local_bar',      NULL, '/bilijard.mp4',        184, 'medium'),
+  ('cam-entrance', 'Entrance Queue', 'Front Door',  'groups',         NULL, '/kocani.mp4',           96, 'medium'),
+  ('cam-stage',    'Stage Crowd',    'Main Stage',  'theater_comedy', NULL, '/fight_0014.mp4',    842, 'high')
 ) AS c(code, label, zone, icon, image_url, video_url, occupancy, density) ON TRUE
 WHERE v.code = 'foundry-north-hall';
 
@@ -390,7 +390,7 @@ JOIN (VALUES
           'Raised voices and sudden crowd movement detected. Two patrons pushed into the counter; a third joined and the group separated after 18 seconds.',
           'critical', 'high', 82, 'Bar Area North', 'South Concourse',
           46.0511, 14.5051, 12,
-          'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=400&q=60',
+          NULL,
           'active', 'Unit 14 · Officer Miller', 3,
           '{"x":0.34,"y":0.28,"width":0.28,"height":0.46,"label":"Conflict 82%"}',
           'cam-bar'),
@@ -398,7 +398,7 @@ JOIN (VALUES
           'Crowd density crossing the safe threshold in front of the main stage left barrier.',
           'warning', 'medium', 67, 'Main Stage', 'North Hall',
           NULL, NULL, 5,
-          'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?auto=format&fit=crop&w=400&q=60',
+          NULL,
           'active', 'Floor Lead · Priya R.', 180,
           NULL,
           'cam-stage'),
@@ -406,7 +406,7 @@ JOIN (VALUES
           'Entrance queue grew past 80 patrons. Consider opening secondary lane.',
           'info', 'low', 54, 'Entrance Queue', 'Front of House',
           NULL, NULL, 9,
-          'https://images.unsplash.com/photo-1493676304819-0d7a8d026dcf?auto=format&fit=crop&w=400&q=60',
+          NULL,
           'active', 'Gate Supervisor · Jamal K.', 84,
           NULL,
           'cam-entrance'),
@@ -414,7 +414,7 @@ JOIN (VALUES
           'Patron on the floor near grid C3, not moving for 22 seconds. Surrounding crowd is clearing space.',
           'critical', 'high', 74, 'Dance Floor Center', 'Dance Floor',
           NULL, NULL, 2,
-          'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&w=400&q=60',
+          NULL,
           'active', 'Medic 02 · R. Okafor', 1,
           '{"x":0.48,"y":0.54,"width":0.14,"height":0.22,"label":"Person down 74%"}',
           'cam-main'),
@@ -422,7 +422,7 @@ JOIN (VALUES
           'Same individual blocking emergency exit B for over 3 minutes despite signage.',
           'warning', 'medium', 71, 'Fire Exit B', 'South Concourse',
           NULL, NULL, 7,
-          'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=400&q=60',
+          NULL,
           'active', 'Floor Team · Marco B.', 1,
           NULL,
           'cam-bar')
