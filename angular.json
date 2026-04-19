@@ -3,7 +3,7 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "vigilant-architect": {
+    "vireal": {
       "projectType": "application",
       "schematics": {
         "@schematics/angular:component": {
@@ -19,7 +19,7 @@
         "build": {
           "builder": "@angular-devkit/build-angular:application",
           "options": {
-            "outputPath": "dist/vigilant-architect",
+            "outputPath": "dist/vireal",
             "index": "src/index.html",
             "browser": "src/main.ts",
             "polyfills": ["zone.js"],
@@ -61,14 +61,14 @@
           "builder": "@angular-devkit/build-angular:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "vigilant-architect:build:production"
+              "buildTarget": "vireal:build:production"
             },
             "development": {
-              "buildTarget": "vigilant-architect:build:development",
+              "buildTarget": "vireal:build:development",
               "proxyConfig": "proxy.conf.js"
             },
             "with-api-proxy": {
-              "buildTarget": "vigilant-architect:build:development",
+              "buildTarget": "vireal:build:development",
               "proxyConfig": "proxy.conf.js"
             }
           },

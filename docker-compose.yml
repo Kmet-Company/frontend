@@ -1,8 +1,8 @@
-# Vigilant Architect — app stack.
+# ViReAl — app stack.
 #
 # Public entrypoint is served by the Traefik instance running on the host
 # via the external `proxy` network. Only the `web` container joins that
-# network; `db` and `api` stay on the internal `vigilant-net` and are not
+# network; `db` and `api` stay on the internal `vireal-net` and are not
 # reachable from the internet.
 #
 #   https://vireal.club        -> nginx (Angular SPA + /api proxy to PostgREST)
@@ -10,18 +10,19 @@
 # One-time: Traefik expects external Docker network `proxy` (create if missing):
 #   docker network create proxy
 #
-# Rebuild + run full stack (DB, PostgREST, AI model, gateway, nginx UI on :8080):
+# Core stack only (DB + PostgREST + nginx UI on :${WEB_HOST_PORT:-8100}):
 #   docker compose up --build -d
 #
-# App (no Traefik): http://127.0.0.1:8080/  · PostgREST :3000 · gateway :8000
+# Full stack incl. AI + gateway:
+#   docker compose --profile ai --profile gateway up --build -d
+#
+# App (no Traefik): http://127.0.0.1:8100/  · PostgREST :3001 · gateway :8000
 #
 # To run the gateway without the model (mock responses), set AI_VISION_URL empty
 # in a `.env` file next to this compose file, e.g. AI_VISION_URL=
 #
 # Local Angular: `npm run dev:db-api` then `npm start` (proxy: proxy.conf.js).
 # Or one shot: `npm run start:docker-api`. Open http://localhost:4200
-#
-#   docker compose up -d db api ai-vision gateway
 #
 # Set STATIC_ASSET_BASE so the gateway can fetch MP4s from ng serve (not nginx `web`):
 #   echo 'STATIC_ASSET_BASE=http://host.docker.internal:4200' >> .env
@@ -30,36 +31,36 @@
 services:
   db:
     image: postgres:17
-    container_name: vigilant-db
+    container_name: vireal-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: vigilant
-      POSTGRES_PASSWORD: vigilant
-      POSTGRES_DB: vigilant
+      POSTGRES_USER: vireal
+      POSTGRES_PASSWORD: vireal
+      POSTGRES_DB: vireal
     # DB is not exposed to the public internet. Bind to localhost on the VM
     # so you can still tunnel in with `ssh -L 5442:localhost:5442 vm` if
     # you need psql / DBeaver access. Remove this whole block for full lockdown.
     ports:
       - "127.0.0.1:5442:5432"
     volumes:
-      - vigilant-pgdata:/var/lib/postgresql/data
+      - vireal-pgdata:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vigilant -d vigilant"]
+      test: ["CMD-SHELL", "pg_isready -U vireal -d vireal"]
       interval: 5s
       timeout: 3s
       retries: 20
-    networks: [vigilant-net]
+    networks: [vireal-net]
 
   api:
     image: postgrest/postgrest:v12.2.3
-    container_name: vigilant-api
+    container_name: vireal-api
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     environment:
-      PGRST_DB_URI: postgres://authenticator:authenticator@db:5432/vigilant
+      PGRST_DB_URI: postgres://authenticator:authenticator@db:5432/vireal
       PGRST_DB_SCHEMAS: public
       PGRST_DB_ANON_ROLE: web_anon
       PGRST_OPENAPI_SERVER_PROXY_URI: https://vireal.club/api
@@ -73,12 +74,19 @@ services:
     # Production traffic still goes through nginx /api/ in the `web` service.
     ports:
       - "3001:3000"
-    networks: [vigilant-net]
+    networks: [vireal-net]
 
+  # Optional Python gateway that fronts the AI vision service. Kept behind
+  # the `gateway` profile because its source lives outside this repo
+  # (../gateway) and isn't checked out on every deployment target. Start it
+  # with `docker compose --profile gateway up -d` on machines that have the
+  # sibling repo cloned; nginx proxies /gateway/* with lazy DNS so the web
+  # container stays healthy when this service is absent.
   gateway:
+    profiles: ["gateway"]
     build: ../gateway
-    image: vigilant-gateway:latest
-    container_name: vigilant-gateway
+    image: vireal-gateway:latest
+    container_name: vireal-gateway
     restart: unless-stopped
     depends_on:
       api:
@@ -98,16 +106,25 @@ services:
       ANALYSIS_INTERVAL_SEC: ${ANALYSIS_INTERVAL_SEC:-0}
     expose:
       - "8000"
+    # Local dev: expose gateway on the host for quick curling / running the
+    # Angular app against a hosted gateway without Traefik. Public traffic
+    # still goes through nginx /gateway/ in the `web` service.
     ports:
       - "127.0.0.1:8000:8000"
-    networks: [vigilant-net]
+    networks: [vireal-net]
 
+  # Optional AI vision service. Kept behind the `ai` profile because its
+  # source lives outside this repo (../ai) and the model download is heavy;
+  # most deployments use the gateway's mock responses instead. Start it with
+  # `docker compose --profile ai up -d` (or together with gateway via
+  # `--profile ai --profile gateway`).
   ai-vision:
+    profiles: ["ai"]
     build:
       context: ../ai
       dockerfile: Dockerfile
-    image: vigilant-ai-vision:latest
-    container_name: vigilant-ai-vision
+    image: vireal-ai-vision:latest
+    container_name: vireal-ai-vision
     restart: unless-stopped
     expose:
       - "8000"
@@ -115,7 +132,7 @@ services:
     ports:
       - "127.0.0.1:8001:8000"
     volumes:
-      - vigilant-hf-cache:/root/.cache/huggingface
+      - vireal-hf-cache:/root/.cache/huggingface
     healthcheck:
       test:
         [
@@ -126,23 +143,24 @@ services:
       timeout: 10s
       retries: 40
       start_period: 600s
-    networks: [vigilant-net]
+    networks: [vireal-net]
 
   web:
     build: .
-    image: vigilant-architect:latest
-    container_name: vigilant-architect
+    image: vireal:latest
+    container_name: vireal-web
     restart: unless-stopped
     depends_on:
       - api
-      - gateway
     environment:
       API_URL: http://api:3000
-    # Local dev: expose the Angular SPA on http://localhost:8080 so we can
-    # open the dashboard without Traefik. Production still routes via
-    # Traefik on :443.
+    # Local dev: expose the Angular SPA on http://localhost:${WEB_HOST_PORT}
+    # so we can open the dashboard without Traefik. In production the SPA
+    # is reached via Traefik on :443 through the `proxy` network, so this
+    # host binding is purely for convenience. Default 8100 avoids collisions
+    # with Traefik's own :8080 dashboard on shared VMs; override via env.
     ports:
-      - "8080:80"
+      - "8100:80"
     # Traefik's docker provider skips containers whose health status isn't
     # `healthy`. The Dockerfile's wget-based healthcheck has been flaky on
     # BusyBox and leaves the container stuck in `starting`, so disable it
@@ -150,25 +168,25 @@ services:
     healthcheck:
       disable: true
     networks:
-      - vigilant-net     # so nginx can proxy /api/ to the `api` service
-      - proxy            # so Traefik on the host can route to it
+      - vireal-net      # so nginx can proxy /api/ to the `api` service
+      - proxy           # so Traefik on the host can route to it
     labels:
       - 'traefik.enable=true'
       - 'traefik.docker.network=proxy'
 
-      - 'traefik.http.routers.vigilant-web.rule=Host(`vireal.club`)'
-      - 'traefik.http.routers.vigilant-web.entrypoints=websecure'
-      - 'traefik.http.routers.vigilant-web.priority=100'
-      - 'traefik.http.routers.vigilant-web.tls.certresolver=le'
+      - 'traefik.http.routers.vireal-web.rule=Host(`vireal.club`)'
+      - 'traefik.http.routers.vireal-web.entrypoints=websecure'
+      - 'traefik.http.routers.vireal-web.priority=100'
+      - 'traefik.http.routers.vireal-web.tls.certresolver=le'
 
-      - 'traefik.http.services.vigilant-web.loadbalancer.server.port=80'
+      - 'traefik.http.services.vireal-web.loadbalancer.server.port=80'
 
 volumes:
-  vigilant-pgdata:
-  vigilant-hf-cache:
+  vireal-pgdata:
+  vireal-hf-cache:
 
 networks:
-  vigilant-net:
+  vireal-net:
     driver: bridge
   proxy:
     external: true

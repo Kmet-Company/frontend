@@ -41,8 +41,8 @@ export class AuthService {
   // realm client).
   static config: KeycloakAppConfig = {
     url: 'https://auth.vireal.club',
-    realm: 'vigilant',
-    clientId: 'vigilant-web',
+    realm: 'vireal',
+    clientId: 'vireal-web',
   };
 
   private readonly _user = signal<AuthUser | null>(null);

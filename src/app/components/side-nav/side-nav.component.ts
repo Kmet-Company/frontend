@@ -110,7 +110,7 @@ interface NavGroup {
           type="button"
           (click)="auth.logout()"
           class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors"
-          title="Sign out of Vigilant Architect"
+          title="Sign out of ViReAl"
         >
           <span class="material-symbols-outlined text-[20px]">logout</span>
           <span class="flex-1 text-left">Sign out</span>
