@@ -45,6 +45,29 @@ export interface RealtimeAnalysisResult {
   error?: string;
 }
 
+/** Response from `/gateway/detect-fire-frame/{camera_code}` (ai-fire YOLO). */
+export interface FireFrameBox {
+  /** 0..1 normalised coordinates relative to the analysed frame. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** 0..1 YOLO confidence for this box. */
+  confidence: number;
+  /** Class name from the YOLO model ("fire", "smoke", …). */
+  label: string;
+}
+
+export interface FireFrameResponse {
+  camera_code?: string;
+  mock?: boolean;
+  width: number;
+  height: number;
+  fire_detected: boolean;
+  max_confidence: number;
+  boxes: FireFrameBox[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class AiGatewayService {
   private readonly http = inject(HttpClient);
@@ -69,6 +92,21 @@ export class AiGatewayService {
     return this.http.post<GatewayDetectionsResponse>(
       `${this.base}/analyze-all`,
       {},
+    );
+  }
+
+  /**
+   * Send one camera frame (JPEG) to the YOLO fire detector and get back
+   * bounding boxes in 0..1 normalised coordinates. Fast enough (~100-300ms
+   * on CPU) that the dashboard can poll this roughly once per second per
+   * visible camera tile.
+   */
+  detectFireFrame(cameraCode: string, jpeg: Blob): Observable<FireFrameResponse> {
+    const body = new FormData();
+    body.append('file', jpeg, `${cameraCode}-frame.jpg`);
+    return this.http.post<FireFrameResponse>(
+      `${this.base}/detect-fire-frame/${encodeURIComponent(cameraCode)}`,
+      body,
     );
   }
 

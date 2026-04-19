@@ -51,7 +51,7 @@ export class AlertsService {
       occupancy: 184,
       density: 'medium',
       imageUrl: '',
-      videoUrl: '/bilijard.mp4',
+      videoUrl: '/no_fight_black_and_white.mp4',
     },
     {
       id: 'cam-entrance',
@@ -71,7 +71,7 @@ export class AlertsService {
       occupancy: 842,
       density: 'high',
       imageUrl: '',
-      videoUrl: '/fight_0014.mp4',
+      videoUrl: '/msos.mp4',
     },
   ]);
 
@@ -90,7 +90,6 @@ export class AlertsService {
       cameraId: 'cam-bar',
       minutesAgo: 12,
       preview: '',
-      boundingBox: { x: 0.34, y: 0.28, width: 0.28, height: 0.46, label: 'Conflict 82%' },
       involvedParties: 3,
       leadResponder: 'Unit 14 · Officer Miller',
       events: [
@@ -202,7 +201,6 @@ export class AlertsService {
       cameraId: 'cam-main',
       minutesAgo: 2,
       preview: '',
-      boundingBox: { x: 0.48, y: 0.54, width: 0.14, height: 0.22, label: 'Person down 74%' },
       involvedParties: 1,
       leadResponder: 'Medic 02 · R. Okafor',
       events: [
@@ -388,6 +386,16 @@ export class AlertsService {
   private readonly _toast = signal<string | null>(null);
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
+  /**
+   * Composite `${modelKind}:${cameraId}` → ms timestamp of the last
+   * auto-raised alert. Used as a 2-minute cooldown so the continuously
+   * running fire / violence loops don't flood the feed when a detection
+   * persists across frames or chunks.
+   */
+  private readonly lastAutoAlertAt = new Map<string, number>();
+  /** ms — minimum gap between auto alerts for the same `{model, camera}`. */
+  private static readonly AUTO_ALERT_COOLDOWN_MS = 120_000;
+
   readonly cameras = this._cameras.asReadonly();
   readonly alerts = this._alerts.asReadonly();
   readonly history = this._history.asReadonly();
@@ -545,6 +553,143 @@ export class AlertsService {
       description: 'Operator marked the alert as a false positive.',
     });
     this.showToast('Alert dismissed');
+  }
+
+  /**
+   * Raise a critical "Fire detected" alert for a camera from the live YOLO
+   * pipeline. Cooldown-throttled per camera (see
+   * {@link AlertsService.AUTO_ALERT_COOLDOWN_MS}) so a persistent fire
+   * produces one alert, not dozens.
+   *
+   * Returns the newly-created alert, or `null` if we're still inside the
+   * cooldown window.
+   *
+   * `snapshotDataUrl` (usually the same JPEG we sent to YOLO) is stored on
+   * `alert.previewUrl`, so the alert card shows the exact frame that
+   * triggered the detection. We intentionally do NOT persist a bounding
+   * box on the alert: live detection boxes are drawn directly by
+   * {@link FireDetectionService} with a tight linger, so piggy-backing a
+   * box on the long-lived alert record would leave a stale "Fire XX%"
+   * overlay sitting on the camera long after the flame leaves frame.
+   */
+  raiseFireAlert(
+    cameraId: string,
+    maxConfidence: number,
+    snapshotDataUrl?: string,
+  ): VenueAlert | null {
+    if (!this.claimAutoAlertSlot('fire', cameraId)) return null;
+
+    const now = Date.now();
+    const camera = this._cameras().find((c) => c.id === cameraId);
+    const cameraLabel = camera?.label ?? cameraId;
+    const confPct = Math.round(
+      Math.max(0, Math.min(1, maxConfidence)) * 100,
+    );
+    const reference = `FIRE-${String(now).slice(-5)}`;
+    const id = `alert-fire-${cameraId}-${now}`;
+
+    const alert: VenueAlert = {
+      reference,
+      id,
+      title: `Fire detected · ${cameraLabel}`,
+      description: `YOLO fire detection model flagged visual fire indicators on ${cameraLabel}. Verify before escalating.`,
+      severity: 'critical',
+      risk: 'high',
+      confidence: confPct,
+      location: camera?.zone ?? cameraLabel,
+      zone: camera?.zone ?? '',
+      cameraId,
+      detectedAt: new Date(now),
+      previewUrl: snapshotDataUrl ?? '',
+      status: 'active',
+      events: [
+        {
+          at: new Date(now),
+          kind: 'detection',
+          title: 'Fire detection model triggered',
+          description: `YOLO fire detector reported ${confPct}% confidence on ${cameraLabel}.`,
+        },
+      ],
+      notes: [],
+    };
+
+    this._alerts.update((list) => [alert, ...list]);
+    this.showToast(`Fire detected on ${cameraLabel}`);
+    return alert;
+  }
+
+  /**
+   * Raise a critical "Violence detected" alert for a camera from the
+   * continuous deepseek violence classifier. Cooldown-throttled per camera
+   * — same 2-minute window as fire detection — so a sustained incident
+   * produces one alert, not one per 3s chunk.
+   *
+   * `snapshotDataUrl` is a still frame grabbed from the hidden video at the
+   * moment of the triggering chunk; it's saved on `alert.previewUrl` so the
+   * alert card shows the source frame.
+   */
+  raiseViolenceAlert(
+    cameraId: string,
+    violentProbability: number,
+    snapshotDataUrl?: string,
+  ): VenueAlert | null {
+    if (!this.claimAutoAlertSlot('violence', cameraId)) return null;
+
+    const now = Date.now();
+    const camera = this._cameras().find((c) => c.id === cameraId);
+    const cameraLabel = camera?.label ?? cameraId;
+    const confPct = Math.round(
+      Math.max(0, Math.min(1, violentProbability)) * 100,
+    );
+    const reference = `VIOL-${String(now).slice(-5)}`;
+    const id = `alert-violence-${cameraId}-${now}`;
+
+    const alert: VenueAlert = {
+      reference,
+      id,
+      title: `Violence detected · ${cameraLabel}`,
+      description: `VideoMAE violence classifier flagged aggressive motion on ${cameraLabel}. Review the preview clip and verify before escalating.`,
+      severity: 'critical',
+      risk: 'high',
+      confidence: confPct,
+      location: camera?.zone ?? cameraLabel,
+      zone: camera?.zone ?? '',
+      cameraId,
+      detectedAt: new Date(now),
+      previewUrl: snapshotDataUrl ?? '',
+      status: 'active',
+      events: [
+        {
+          at: new Date(now),
+          kind: 'detection',
+          title: 'Violence classifier triggered',
+          description: `Deepseek / VideoMAE reported ${confPct}% violent probability on ${cameraLabel}.`,
+        },
+      ],
+      notes: [],
+    };
+
+    this._alerts.update((list) => [alert, ...list]);
+    this.showToast(`Violence detected on ${cameraLabel}`);
+    return alert;
+  }
+
+  /**
+   * Reserves the per-camera/per-model cooldown slot. Returns `true` if the
+   * caller should emit a new alert, or `false` if we're still within the
+   * 2-minute window after the previous auto-raised alert of the same kind
+   * on the same camera.
+   */
+  private claimAutoAlertSlot(
+    model: 'fire' | 'violence',
+    cameraId: string,
+  ): boolean {
+    const now = Date.now();
+    const key = `${model}:${cameraId}`;
+    const prev = this.lastAutoAlertAt.get(key) ?? 0;
+    if (now - prev < AlertsService.AUTO_ALERT_COOLDOWN_MS) return false;
+    this.lastAutoAlertAt.set(key, now);
+    return true;
   }
 
   escalateAlert(alert: VenueAlert): void {
