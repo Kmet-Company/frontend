@@ -278,4 +278,19 @@
   .chip {
     @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider;
   }
+
+  /*
+   * Brand logo auto-swap. The default PNG has a white wordmark that reads
+   * on dark surfaces. On light surfaces we point the same <img> at the
+   * dark-wordmark variant via CSS `content:` so the markup stays single-source.
+   */
+  :root[data-theme='light'] .brand-logo {
+    content: url('/logo-light.png');
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme='dark']) .brand-logo {
+      content: url('/logo-light.png');
+    }
+  }
 }

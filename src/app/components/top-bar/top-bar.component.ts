@@ -19,18 +19,16 @@ import { AuthService } from '../../services/auth.service';
       <button
         type="button"
         (click)="onLogoClick()"
-        class="flex items-center gap-3 min-w-0 rounded-lg px-1 -mx-1 hover:bg-surface-container-high transition-colors text-left"
+        class="flex items-center gap-3 min-w-0 rounded-lg px-2 -mx-2 py-1 hover:bg-surface-container-high transition-colors text-left"
         title="Go to Live Dashboard"
       >
-        <span
-          class="w-9 h-9 rounded-lg bg-primary-container text-primary flex items-center justify-center flex-shrink-0"
-        >
-          <span class="material-symbols-outlined sym-fill text-[20px]">shield_person</span>
-        </span>
-        <div class="leading-tight min-w-0">
-          <div class="text-base font-bold tracking-tight text-on-surface truncate">
-            Vigilant Architect
-          </div>
+        <img
+          src="logo.png"
+          alt="ViReAl — Vision Recognition Alert"
+          class="brand-logo h-10 w-auto flex-shrink-0 select-none"
+          draggable="false"
+        />
+        <div class="leading-tight min-w-0 hidden md:block ml-1 pl-3 border-l border-outline-variant/40">
           <div class="text-[10px] uppercase tracking-widest text-on-surface-variant truncate">
             Venue Operations
           </div>
