@@ -69,6 +69,8 @@ services:
       POSTGREST_URL: http://api:3000
       # Set to http://ai-vision:8000 when running `docker compose --profile ai up`
       AI_VISION_URL: ${AI_VISION_URL:-}
+      # YOLO fire API (`uvicorn apis.fire_detection:app`). When empty, /predict-fire-upload returns mock JSON.
+      AI_FIRE_URL: ${AI_FIRE_URL:-}
       # Periodic analysis (seconds). 0 = disabled; use POST /gateway/analyze/{code} from UI.
       ANALYSIS_INTERVAL_SEC: ${ANALYSIS_INTERVAL_SEC:-0}
     expose:
