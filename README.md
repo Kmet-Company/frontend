@@ -48,20 +48,49 @@ The dev server listens on `http://localhost:4200`.
 
 ## Docker
 
-Build and run the production image:
+The full ViReAl system is split across three sibling repos that share the
+docker network `vireal-net`:
+
+```
+dragonhack2026/
+├── frontend/   ← this repo    db + PostgREST + nginx SPA
+├── gateway/                    FastAPI orchestrator  (/gateway/* in nginx)
+└── ai/                         Violence vision model (http://ai-vision:8000)
+```
+
+### One-time host setup
+
+```bash
+docker network create vireal-net
+docker network create proxy        # only where Traefik runs
+```
+
+### Frontend-only (DB + PostgREST + nginx SPA)
+
+```bash
+docker compose up --build -d
+# open http://localhost:8100/
+```
+
+### Full stack
+
+```bash
+(cd ../ai       && docker compose up --build -d)   # ai-vision:8000
+(cd ../gateway  && docker compose up --build -d)   # gateway:8000
+docker compose up --build -d                       # db + api + web
+```
+
+Nginx proxies `/api/*` → `api:3000` (PostgREST) and `/gateway/*` →
+`gateway:8000`. When the gateway or ai stack isn't up, those endpoints
+return 5xx and the dashboard degrades gracefully (empty detections /
+mock health).
+
+### Image
 
 ```bash
 docker build -t vireal .
-docker run --rm -p 8080:80 vireal
+docker run --rm -p 8100:80 vireal
 ```
-
-Or use Compose:
-
-```bash
-docker compose up --build
-```
-
-Then open <http://localhost:8080>.
 
 The multi-stage `Dockerfile` builds the Angular bundle in `node:20-alpine` and serves the static `dist/vireal/browser` output through `nginx:1.27-alpine` with SPA history-API fallback, gzip, sane cache headers, and basic security headers (see `nginx.conf`).
 
