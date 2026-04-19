@@ -17,6 +17,7 @@ import {
   RiskLevel,
   VenueAlert,
 } from '../../models/venue.models';
+import { resolveCameraVideoUrl } from '../../utils/camera-default-video';
 
 @Component({
   selector: 'va-incident-detail',
@@ -74,12 +75,25 @@ import {
               <div
                 class="bg-surface-container rounded-xl overflow-hidden aspect-video relative group"
               >
-                <img
-                  class="w-full h-full object-cover opacity-75"
-                  [src]="cameraImage()"
-                  [alt]="item.title + ' footage'"
-                  loading="lazy"
-                />
+                @if (cameraVideoSrc(); as vsrc) {
+                  <video
+                    class="w-full h-full object-cover opacity-75 pointer-events-none"
+                    [src]="vsrc"
+                    [poster]="cameraPoster()"
+                    autoplay
+                    muted
+                    loop
+                    playsinline
+                    preload="metadata"
+                  ></video>
+                } @else {
+                  <img
+                    class="w-full h-full object-cover opacity-75"
+                    [src]="cameraImage()"
+                    [alt]="item.title + ' footage'"
+                    loading="lazy"
+                  />
+                }
                 <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20"></div>
 
                 <div
@@ -531,6 +545,21 @@ export class IncidentDetailComponent {
     return (
       this.service.cameras().find((c) => c.id === it.cameraId)?.imageUrl ?? it.previewUrl
     );
+  });
+
+  protected readonly cameraVideoSrc = computed(() => {
+    const it = this.incident();
+    if (!it) return '';
+    const cam = this.service.cameras().find((c) => c.id === it.cameraId);
+    if (!cam) return '';
+    return resolveCameraVideoUrl(cam);
+  });
+
+  protected readonly cameraPoster = computed(() => {
+    const it = this.incident();
+    if (!it) return '';
+    const cam = this.service.cameras().find((c) => c.id === it.cameraId);
+    return (cam?.imageUrl || it.previewUrl || '').trim();
   });
 
   protected readonly playbackPct = computed(() => {

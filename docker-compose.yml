@@ -7,8 +7,26 @@
 #
 #   https://vireal.club        -> nginx (Angular SPA + /api proxy to PostgREST)
 #
-# Rebuild + deploy:
+# One-time: Traefik expects external Docker network `proxy` (create if missing):
+#   docker network create proxy
+#
+# Core stack only (DB + PostgREST + nginx UI on :${WEB_HOST_PORT:-8100}):
 #   docker compose up --build -d
+#
+# Full stack incl. AI + gateway:
+#   docker compose --profile ai --profile gateway up --build -d
+#
+# App (no Traefik): http://127.0.0.1:8100/  · PostgREST :3001 · gateway :8000
+#
+# To run the gateway without the model (mock responses), set AI_VISION_URL empty
+# in a `.env` file next to this compose file, e.g. AI_VISION_URL=
+#
+# Local Angular: `npm run dev:db-api` then `npm start` (proxy: proxy.conf.js).
+# Or one shot: `npm run start:docker-api`. Open http://localhost:4200
+#
+# Set STATIC_ASSET_BASE so the gateway can fetch MP4s from ng serve (not nginx `web`):
+#   echo 'STATIC_ASSET_BASE=http://host.docker.internal:4200' >> .env
+# (gateway includes extra_hosts so host.docker.internal resolves on Linux.)
 
 services:
   db:
@@ -71,17 +89,35 @@ services:
     container_name: vireal-gateway
     restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_started
+      ai-vision:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       POSTGREST_URL: http://api:3000
-      # Set to http://ai-vision:8000 when running `docker compose --profile ai up`
-      AI_VISION_URL: ${AI_VISION_URL:-}
+      # In full stack, nginx `web` serves public/*. For `npm start`, set in .env:
+      # STATIC_ASSET_BASE=http://host.docker.internal:4200
+      STATIC_ASSET_BASE: ${STATIC_ASSET_BASE:-http://web}
+      AI_VISION_URL: ${AI_VISION_URL:-http://ai-vision:8000}
+      AI_FIRE_URL: ${AI_FIRE_URL:-http://ai-vision:8000}
       # Periodic analysis (seconds). 0 = disabled; use POST /gateway/analyze/{code} from UI.
       ANALYSIS_INTERVAL_SEC: ${ANALYSIS_INTERVAL_SEC:-0}
     expose:
       - "8000"
+    # Local dev: expose gateway on the host for quick curling / running the
+    # Angular app against a hosted gateway without Traefik. Public traffic
+    # still goes through nginx /gateway/ in the `web` service.
+    ports:
+      - "127.0.0.1:8000:8000"
     networks: [vireal-net]
 
+  # Optional AI vision service. Kept behind the `ai` profile because its
+  # source lives outside this repo (../ai) and the model download is heavy;
+  # most deployments use the gateway's mock responses instead. Start it with
+  # `docker compose --profile ai up -d` (or together with gateway via
+  # `--profile ai --profile gateway`).
   ai-vision:
     profiles: ["ai"]
     build:
@@ -92,6 +128,21 @@ services:
     restart: unless-stopped
     expose:
       - "8000"
+    # Host tools / gateway-on-host: curl http://127.0.0.1:8001/health  →  set AI_VISION_URL=http://127.0.0.1:8001
+    ports:
+      - "127.0.0.1:8001:8000"
+    volumes:
+      - vireal-hf-cache:/root/.cache/huggingface
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/health\", timeout=5)"',
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 40
+      start_period: 600s
     networks: [vireal-net]
 
   web:
@@ -132,6 +183,7 @@ services:
 
 volumes:
   vireal-pgdata:
+  vireal-hf-cache:
 
 networks:
   vireal-net:

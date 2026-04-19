@@ -4,10 +4,12 @@ import {
   computed,
   effect,
   inject,
+  signal,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { catchError, EMPTY, interval, map, of, startWith, switchMap } from 'rxjs';
 
+import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DatePipe } from '@angular/common';
 
@@ -26,6 +28,8 @@ import {
   GatewayHealth,
 } from '../../services/ai-gateway.service';
 import { BoundingBox, CameraFeed } from '../../models/venue.models';
+import { resolveCameraVideoUrl } from '../../utils/camera-default-video';
+import { VideoChunkAnalysisService, toAbsoluteVideoUrl, captureStreamFromVideo } from '../../services/video-chunk-analysis.service';
 
 @Component({
   selector: 'va-dashboard',
@@ -109,6 +113,17 @@ import { BoundingBox, CameraFeed } from '../../models/venue.models';
               <span>All</span>
             </button>
 
+            <button
+              type="button"
+              (click)="analyzeChunksFromBrowser()"
+              [disabled]="chunkAnalyzing()"
+              class="inline-flex items-center gap-1.5 px-2.5 h-9 rounded-lg bg-secondary-container text-on-secondary-container text-xs font-semibold hover:brightness-95 disabled:opacity-50 transition-colors"
+              title="Run now (also resets auto-run lock for this camera)"
+            >
+              <span class="material-symbols-outlined text-[16px]">movie_edit</span>
+              <span>3s → AI</span>
+            </button>
+
             <!-- View mode toggle -->
             <div
               class="flex items-center gap-0.5 p-0.5 rounded-lg bg-surface-container"
@@ -145,6 +160,58 @@ import { BoundingBox, CameraFeed } from '../../models/venue.models';
           </div>
         </header>
 
+        <!-- Browser-side 3s pipeline (not automatic on tile &lt;video&gt; elements) -->
+        <div
+          class="rounded-xl border border-outline-variant/50 bg-surface-container px-3 py-2.5 text-xs text-on-surface"
+        >
+          <div class="flex flex-wrap items-start justify-between gap-2">
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-bold text-on-surface">3-second chunks → model</span>
+                <button
+                  type="button"
+                  (click)="toggleChunkAuto()"
+                  class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border transition-colors"
+                  [class.bg-primary]="chunkAutoEnabled()"
+                  [class.text-on-primary]="chunkAutoEnabled()"
+                  [class.border-primary]="chunkAutoEnabled()"
+                  [class.bg-surface-container-high]="!chunkAutoEnabled()"
+                  [class.text-on-surface-variant]="!chunkAutoEnabled()"
+                  [class.border-outline-variant]="!chunkAutoEnabled()"
+                  title="When on, runs chunk pipeline ~2s after you select a camera (once per selection)"
+                >
+                  Auto {{ chunkAutoEnabled() ? 'on' : 'off' }}
+                </button>
+              </div>
+              <p class="text-on-surface-variant mt-1 leading-snug max-w-[52rem]">
+                Tiles are previews; chunking uses a hidden player + WebM →
+                <code class="text-[10px] bg-surface-container-high px-1 rounded">/gateway/predict-upload</code>
+                (server transcodes WebM for the model). Console:
+                <code class="text-[10px]">[3s-chunk-ai]</code>
+              </p>
+            </div>
+            @if (chunkProgress(); as prog) {
+              <div
+                class="shrink-0 px-2 py-1 rounded-lg bg-primary-container text-on-primary-container text-[11px] font-semibold max-w-[14rem]"
+                [title]="prog.last"
+              >
+                Chunk {{ prog.current }} / {{ prog.total }}
+                <div class="font-normal opacity-90 truncate mt-0.5">{{ prog.last }}</div>
+              </div>
+            }
+          </div>
+          @if (chunkLogLines().length > 0 || chunkAnalyzing()) {
+            <div
+              class="mt-2 max-h-40 overflow-y-auto rounded-lg bg-surface-container-lowest p-2 font-mono text-[10px] leading-snug text-on-surface"
+            >
+              @if (chunkAnalyzing()) {
+                <div class="text-primary font-semibold mb-1">Working…</div>
+              }
+              <pre class="whitespace-pre-wrap m-0 p-0">{{ chunkLogText() }}</pre>
+            </div>
+          }
+        </div>
+
         @if (mode() === 'grid') {
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
             @for (camera of alerts.cameras(); track camera.id) {
@@ -179,6 +246,16 @@ import { BoundingBox, CameraFeed } from '../../models/venue.models';
                 >
                   <button
                     type="button"
+                    (click)="analyzeChunksFromBrowser(); $event.stopPropagation()"
+                    [disabled]="chunkAnalyzing()"
+                    class="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-lg bg-secondary-container/95 backdrop-blur text-on-secondary-container text-[11px] font-semibold hover:brightness-95 disabled:opacity-50 transition-colors"
+                    title="Same as header 3s → AI"
+                  >
+                    <span class="material-symbols-outlined text-[14px]">movie_edit</span>
+                    3s → AI
+                  </button>
+                  <button
+                    type="button"
                     (click)="setMode('grid'); $event.stopPropagation()"
                     class="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-lg bg-surface-container/85 backdrop-blur text-on-surface text-[11px] font-semibold hover:bg-surface-container-high transition-colors"
                     title="Back to grid"
@@ -196,25 +273,16 @@ import { BoundingBox, CameraFeed } from '../../models/venue.models';
                     (click)="onCameraClick(camera.id)"
                     [class]="thumbnailClass(camera)"
                   >
-                    @if (camera.videoUrl) {
-                      <video
-                        [src]="camera.videoUrl"
-                        [poster]="camera.imageUrl"
-                        class="w-full h-full object-cover pointer-events-none"
-                        muted
-                        loop
-                        playsinline
-                        preload="metadata"
-                        autoplay
-                      ></video>
-                    } @else {
-                      <img
-                        [src]="camera.imageUrl"
-                        [alt]="camera.label + ' thumbnail'"
-                        class="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    }
+                    <video
+                      [src]="thumbVideoSrc(camera)"
+                      [poster]="camera.imageUrl"
+                      class="w-full h-full object-cover pointer-events-none"
+                      muted
+                      loop
+                      playsinline
+                      preload="metadata"
+                      autoplay
+                    ></video>
                     <div
                       class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"
                     ></div>
@@ -332,8 +400,30 @@ import { BoundingBox, CameraFeed } from '../../models/venue.models';
 export class DashboardComponent {
   protected readonly alerts = inject(AlertsService);
   private readonly gateway = inject(AiGatewayService);
+  private readonly chunkAnalysis = inject(VideoChunkAnalysisService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+
+  /** Log lines from hidden video → 3s MediaRecorder → `/gateway/predict-upload`. */
+  protected readonly chunkLogLines = signal<string[]>([]);
+  protected readonly chunkAnalyzing = signal(false);
+  protected readonly chunkLogText = computed(() =>
+    this.chunkLogLines().join('\n'),
+  );
+  /** Current chunk index (1-based), total, and last model summary line. */
+  protected readonly chunkProgress = signal<{
+    current: number;
+    total: number;
+    last: string;
+  } | null>(null);
+  protected readonly chunkStepSec = computed(
+    () => this.chunkAnalysis.chunkSeconds,
+  );
+
+  /** When true, run 3s chunk pipeline once after camera selection (debounced). */
+  protected readonly chunkAutoEnabled = signal(true);
+  /** Prevents repeat auto-runs for the same selected camera until selection changes. */
+  private readonly autoChunkDoneForId = signal<string | null>(null);
 
   /** Poll gateway health / last detections so operators see mock vs real model. */
   protected readonly gatewayHealth = toSignal(
@@ -400,6 +490,59 @@ export class DashboardComponent {
       // so signal writes inside this effect are expected.
       { allowSignalWrites: true },
     );
+
+    effect(
+      () => {
+        this.alerts.selectedCameraId();
+        this.autoChunkDoneForId.set(null);
+      },
+      { allowSignalWrites: true },
+    );
+
+    effect(
+      (onCleanup) => {
+        if (!this.chunkAutoEnabled()) {
+          return;
+        }
+        const sel = this.alerts.selectedCameraId();
+        const cams = this.alerts.cameras();
+        if (!sel || cams.length === 0) {
+          return;
+        }
+        if (this.autoChunkDoneForId() === sel) {
+          return;
+        }
+        if (this.chunkAnalyzing()) {
+          return;
+        }
+
+        const handle = window.setTimeout(() => {
+          if (!this.chunkAutoEnabled()) {
+            return;
+          }
+          if (this.alerts.selectedCameraId() !== sel) {
+            return;
+          }
+          if (this.chunkAnalyzing()) {
+            return;
+          }
+          void this.runChunkAnalysis(sel, { auto: true });
+        }, 2200);
+
+        onCleanup(() => window.clearTimeout(handle));
+      },
+      { allowSignalWrites: true },
+    );
+  }
+
+  protected toggleChunkAuto(): void {
+    this.chunkAutoEnabled.update((on) => {
+      const next = !on;
+      if (next) {
+        this.autoChunkDoneForId.set(null);
+      }
+      return next;
+    });
   }
 
   protected readonly activeCameraLabel = computed(() => {
@@ -416,6 +559,10 @@ export class DashboardComponent {
 
   protected boxesFor(cameraId: string): BoundingBox[] {
     return this.alerts.boundingBoxesByCamera().get(cameraId) ?? [];
+  }
+
+  protected thumbVideoSrc(camera: CameraFeed): string {
+    return resolveCameraVideoUrl(camera);
   }
 
   protected setMode(mode: ViewMode): void {
@@ -490,6 +637,300 @@ export class DashboardComponent {
       .subscribe(() => {
         this.alerts.showToast('AI analysis finished for all cameras');
       });
+  }
+
+  /** Manual run: real-time analysis with WebSocket streaming. */
+  protected analyzeChunksFromBrowser(): void {
+    const id =
+      this.alerts.selectedCameraId() ?? this.alerts.cameras()[0]?.id;
+    if (!id) {
+      this.alerts.showToast('No camera');
+      return;
+    }
+    void this.runRealtimeChunkAnalysis(id, { force: true });
+  }
+
+  /**
+   * Records ~3s WebM slices from a hidden player and POSTs each to
+   * `/gateway/predict-upload`.
+   */
+  private runChunkAnalysis(
+    cameraId: string,
+    opts: { auto?: boolean; force?: boolean },
+  ): Promise<void> {
+    if (this.chunkAnalyzing()) {
+      return Promise.resolve();
+    }
+    if (opts.auto && this.autoChunkDoneForId() === cameraId) {
+      return Promise.resolve();
+    }
+    const cam = this.alerts.cameras().find((c) => c.id === cameraId);
+    if (!cam) {
+      if (!opts.auto) {
+        this.alerts.showToast('No camera');
+      }
+      return Promise.resolve();
+    }
+    if (opts.force) {
+      this.autoChunkDoneForId.set(null);
+    }
+
+    const url = resolveCameraVideoUrl(cam);
+    this.chunkLogLines.set([]);
+    this.chunkProgress.set(null);
+    this.chunkAnalyzing.set(true);
+    if (!opts.auto) {
+      this.alerts.showToast(
+        `${cam.label}: 3s chunking started. Watch the log panel below.`,
+      );
+    }
+
+    return this.chunkAnalysis
+      .analyzeUrlInThreeSecondChunks(
+        url,
+        (line) => {
+          this.chunkLogLines.update((lines) => [...lines, line]);
+        },
+        (index, total, summary) => {
+          this.chunkProgress.set({
+            current: index + 1,
+            total,
+            last: summary,
+          });
+        },
+      )
+      .then(() => {
+        this.chunkAnalyzing.set(false);
+        this.autoChunkDoneForId.set(cameraId);
+        if (!opts.auto) {
+          this.alerts.showToast(`${cam.label}: 3s chunk analysis finished`);
+        }
+      })
+      .catch((err: unknown) => {
+        this.chunkAnalyzing.set(false);
+        this.chunkProgress.set(null);
+        this.autoChunkDoneForId.set(cameraId);
+        let msg = err instanceof Error ? err.message : String(err);
+        if (err instanceof HttpErrorResponse) {
+          const body = err.error;
+          if (body !== undefined && body !== null) {
+            msg =
+              typeof body === 'string'
+                ? body
+                : JSON.stringify(body).slice(0, 800);
+          } else {
+            msg = `${msg} (HTTP ${err.status})`;
+          }
+        }
+        this.chunkLogLines.update((lines) => [...lines, `Error: ${msg}`]);
+        this.alerts.showToast(
+          opts.auto
+            ? `Auto 3s chunks failed: ${msg.slice(0, 120)}`
+            : `3s chunk analysis failed: ${msg.slice(0, 120)}`,
+        );
+      });
+  }
+
+  /**
+   * Real-time analysis: Records ~3s WebM slices and sends via WebSocket
+   * to get immediate results from the AI models.
+   */
+  private runRealtimeChunkAnalysis(
+    cameraId: string,
+    opts: { auto?: boolean; force?: boolean },
+  ): Promise<void> {
+    if (this.chunkAnalyzing()) {
+      return Promise.resolve();
+    }
+    if (opts.auto && this.autoChunkDoneForId() === cameraId) {
+      return Promise.resolve();
+    }
+    const cam = this.alerts.cameras().find((c) => c.id === cameraId);
+    if (!cam) {
+      if (!opts.auto) {
+        this.alerts.showToast('No camera');
+      }
+      return Promise.resolve();
+    }
+    if (opts.force) {
+      this.autoChunkDoneForId.set(null);
+    }
+
+    const url = resolveCameraVideoUrl(cam);
+    this.chunkLogLines.set([]);
+    this.chunkProgress.set(null);
+    this.chunkAnalyzing.set(true);
+    if (!opts.auto) {
+      this.alerts.showToast(
+        `${cam.label}: Real-time 3s chunking started. Watch the log panel below.`,
+      );
+    }
+
+    return this.runRealtimeAnalysis(url, cam.id, (line) => {
+      this.chunkLogLines.update((lines) => [...lines, line]);
+    });
+  }
+
+  private runRealtimeAnalysis(
+    videoUrl: string,
+    cameraCode: string,
+    onLine: (line: string) => void,
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const abs = toAbsoluteVideoUrl(videoUrl);
+      const video = document.createElement('video');
+      video.crossOrigin = 'anonymous';
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = 'auto';
+      video.src = abs;
+
+      let websocket: WebSocket | null = null;
+      let subscription: any = null;
+
+      const cleanup = () => {
+        if (subscription) {
+          subscription.unsubscribe();
+        }
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+          websocket.close();
+        }
+        video.remove();
+        this.chunkAnalyzing.set(false);
+      };
+
+      video.onloadedmetadata = () => {
+        const duration = Number.isFinite(video.duration) ? video.duration : 0;
+        if (duration <= 0) {
+          cleanup();
+          reject(new Error('Video duration is not available'));
+          return;
+        }
+
+        const totalChunks = Math.max(1, Math.ceil(duration / 3));
+        onLine(
+          `Real-time analysis: ${duration.toFixed(1)}s → ${totalChunks} chunk(s) × 3s (WebSocket streaming)`,
+        );
+
+        // Start WebSocket connection
+        const realtimeConnection = this.gateway.analyzeRealtime(cameraCode);
+        
+        subscription = realtimeConnection.observable.subscribe({
+          next: (result: any) => {
+            if (result.error) {
+              onLine(`ERROR: ${result.error}`);
+            } else {
+              const summary = this.formatRealtimeResult(result);
+              onLine(`[${result.timestamp}] ${summary}`);
+            }
+          },
+          error: (error) => {
+            onLine(`WebSocket error: ${error}`);
+            cleanup();
+            reject(error);
+          },
+          complete: () => {
+            onLine('Real-time analysis completed');
+            cleanup();
+            resolve();
+          }
+        });
+
+        // Get the WebSocket instance and start recording
+        realtimeConnection.websocket.then((ws) => {
+          websocket = ws;
+          // Start recording chunks
+          this.recordAndSendChunks(video, websocket, totalChunks, onLine, () => {
+            // All chunks sent, close WebSocket after a delay
+            setTimeout(() => {
+              if (websocket && websocket.readyState === WebSocket.OPEN) {
+                websocket.close();
+              }
+            }, 1000);
+          });
+        });
+      };
+
+      video.onerror = () => {
+        cleanup();
+        reject(new Error('Failed to load video'));
+      };
+    });
+  }
+
+  private recordAndSendChunks(
+    video: HTMLVideoElement,
+    websocket: WebSocket | null,
+    totalChunks: number,
+    onLine: (line: string) => void,
+    onComplete: () => void,
+  ): void {
+    let currentChunk = 0;
+
+    const recordNextChunk = () => {
+      if (currentChunk >= totalChunks) {
+        onComplete();
+        return;
+      }
+
+      const startTime = currentChunk * 3;
+      const chunkDuration = Math.min(3, video.duration - startTime);
+
+      video.currentTime = startTime;
+
+      const chunks: Blob[] = [];
+      const mediaRecorder = new MediaRecorder(captureStreamFromVideo(video));
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        blob.arrayBuffer().then((buffer) => {
+          if (websocket && websocket.readyState === WebSocket.OPEN) {
+            this.gateway.sendVideoChunk(websocket, buffer);
+            onLine(`Sent chunk ${currentChunk + 1}/${totalChunks} (${blob.size} bytes)`);
+          }
+        });
+
+        currentChunk++;
+        // Small delay before next chunk
+        setTimeout(recordNextChunk, 100);
+      };
+
+      // Start recording
+      mediaRecorder.start();
+
+      // Stop after chunk duration
+      setTimeout(() => {
+        mediaRecorder.stop();
+      }, chunkDuration * 1000);
+    };
+
+    // Wait for video to be ready
+    video.onseeked = () => {
+      recordNextChunk();
+    };
+  }
+
+  private formatRealtimeResult(result: any): string {
+    if (result.result?.results) {
+      // Violence detection result
+      const r = result.result.results[0];
+      if (r) {
+        return `Violence: ${r.prediction} (${(r.violent_probability * 100).toFixed(1)}% violent)`;
+      }
+    } else if (result.result?.results) {
+      // Fire detection result
+      const r = result.result.results[0];
+      if (r) {
+        return `Fire: ${r.fire_detected ? 'DETECTED' : 'None'} (${r.max_fire_confidence?.toFixed(2) || 0} confidence)`;
+      }
+    }
+    return `Result: ${JSON.stringify(result.result)}`;
   }
 
   protected thumbnailClass(camera: CameraFeed): string {

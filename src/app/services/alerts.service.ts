@@ -42,8 +42,7 @@ export class AlertsService {
       density: 'high',
       imageUrl:
         'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&w=1200&q=70',
-      videoUrl:
-        'https://filesamples.com/samples/video/mp4/sample_640x360.mp4',
+      videoUrl: '/cam-main.mp4',
     },
     {
       id: 'cam-bar',
@@ -54,8 +53,7 @@ export class AlertsService {
       density: 'medium',
       imageUrl:
         'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=1200&q=70',
-      videoUrl:
-        'https://filesamples.com/samples/video/mp4/sample_640x360.mp4',
+      videoUrl: '/cam-main.mp4',
     },
     {
       id: 'cam-entrance',
@@ -66,8 +64,7 @@ export class AlertsService {
       density: 'medium',
       imageUrl:
         'https://images.unsplash.com/photo-1493676304819-0d7a8d026dcf?auto=format&fit=crop&w=1200&q=70',
-      videoUrl:
-        'https://filesamples.com/samples/video/mp4/sample_640x360.mp4',
+      videoUrl: '/kocani.mp4',
     },
     {
       id: 'cam-stage',
@@ -77,9 +74,8 @@ export class AlertsService {
       occupancy: 842,
       density: 'high',
       imageUrl:
-        'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?auto=format&fit=crop&w=1200&q=70',
-      videoUrl:
-        'https://filesamples.com/samples/video/mp4/sample_640x360.mp4',
+        '',
+      videoUrl: '/black_and_white.mp4',
     },
   ]);
 
