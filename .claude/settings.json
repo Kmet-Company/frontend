@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//q/DH26/mobile-app/**)"
+    ],
+    "additionalDirectories": [
+      "Q:\\DH26\\mobile-app\\app"
+    ]
+  }
+}

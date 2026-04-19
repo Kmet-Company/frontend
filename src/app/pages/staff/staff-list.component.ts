@@ -2,6 +2,7 @@ import { FormsModule } from '@angular/forms';
 import {
   ChangeDetectionStrategy,
   Component,
+  OnInit,
   computed,
   inject,
   signal,
@@ -9,6 +10,7 @@ import {
 
 import { ToastComponent } from '../../components/toast/toast.component';
 import { AlertsService } from '../../services/alerts.service';
+import { StaffService } from '../../services/staff.service';
 import { StaffMember, StaffRole } from '../../models/venue.models';
 
 interface RoleMeta {
@@ -105,27 +107,58 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
           <button
             type="button"
-            (click)="openAdd()"
-            class="inline-flex items-center gap-1.5 px-3 h-10 rounded-lg bg-primary text-on-primary text-xs font-semibold hover:brightness-110 transition-all"
+            (click)="refresh()"
+            [disabled]="staffService.loading()"
+            class="inline-flex items-center gap-1.5 px-3 h-10 rounded-lg bg-surface-container-highest text-on-surface text-xs font-semibold hover:brightness-110 transition-all disabled:opacity-50"
+            title="Reload from Keycloak"
           >
-            <span class="material-symbols-outlined text-[16px]">person_add</span>
-            Add staff
+            <span class="material-symbols-outlined text-[16px]">refresh</span>
+            Refresh
           </button>
+
+          @if (staffService.canManage()) {
+            <button
+              type="button"
+              (click)="openAdd()"
+              class="inline-flex items-center gap-1.5 px-3 h-10 rounded-lg bg-primary text-on-primary text-xs font-semibold hover:brightness-110 transition-all"
+            >
+              <span class="material-symbols-outlined text-[16px]">person_add</span>
+              Add staff
+            </button>
+          }
         </div>
+
+        @if (staffService.error(); as err) {
+          <div class="bg-error-container text-on-error-container rounded-xl px-4 py-3 text-sm flex items-start gap-2">
+            <span class="material-symbols-outlined text-[18px] mt-0.5">error</span>
+            <div>
+              <div class="font-semibold">Could not load the roster</div>
+              <div class="text-xs mt-0.5 opacity-90">{{ err }}</div>
+            </div>
+          </div>
+        }
 
         <!-- Table -->
         <div class="bg-surface-container rounded-xl overflow-hidden">
           <div
-            class="grid grid-cols-[1.5fr_1.6fr_140px_160px_110px] items-center gap-4 px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant bg-surface-container-high/60"
+            class="grid grid-cols-[1.5fr_1.6fr_140px_160px_170px] items-center gap-4 px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant bg-surface-container-high/60"
           >
             <span>Name</span>
             <span>Email</span>
             <span>Role</span>
             <span>Phone</span>
-            <span class="text-right">QR Code</span>
+            <span class="text-right">Actions</span>
           </div>
 
-          @if (filtered().length === 0) {
+          @if (staffService.loading() && filtered().length === 0) {
+            <div class="p-8 text-center text-sm text-on-surface-variant">
+              <span class="material-symbols-outlined text-3xl text-primary animate-spin"
+                >progress_activity</span
+              >
+              <div class="mt-2 font-semibold text-on-surface">Loading roster…</div>
+              <div class="text-xs mt-1">Reading staff from Keycloak.</div>
+            </div>
+          } @else if (filtered().length === 0) {
             <div class="p-8 text-center text-sm text-on-surface-variant">
               <span class="material-symbols-outlined text-3xl text-primary"
                 >group</span
@@ -141,7 +174,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
           @for (item of filtered(); track item.id) {
             <div
-              class="grid grid-cols-[1.5fr_1.6fr_140px_160px_110px] items-center gap-4 px-5 py-3 text-sm hover:bg-surface-container-high transition-colors border-t border-outline-variant/30"
+              class="grid grid-cols-[1.5fr_1.6fr_140px_160px_170px] items-center gap-4 px-5 py-3 text-sm hover:bg-surface-container-high transition-colors border-t border-outline-variant/30"
             >
               <div class="flex items-center gap-3 min-w-0">
                 <div
@@ -166,10 +199,10 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
               </span>
 
               <span class="text-on-surface-variant text-xs font-mono truncate">
-                {{ item.phone }}
+                {{ item.phone || '—' }}
               </span>
 
-              <div class="flex items-center justify-end">
+              <div class="flex items-center justify-end gap-2">
                 <button
                   type="button"
                   (click)="openQr(item)"
@@ -181,6 +214,26 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                   >
                   QR
                 </button>
+                @if (staffService.canManage() && item.role !== 'manager') {
+                  <button
+                    type="button"
+                    (click)="confirmRemove(item)"
+                    [disabled]="pendingRemove() === item.id"
+                    class="inline-flex items-center justify-center w-8 h-8 rounded-md bg-surface-container-highest text-on-surface-variant text-xs font-semibold hover:bg-error hover:text-on-error transition-colors disabled:opacity-50"
+                    title="Remove from roster"
+                  >
+                    <span class="material-symbols-outlined text-[16px]">{{
+                      pendingRemove() === item.id ? 'progress_activity' : 'delete'
+                    }}</span>
+                  </button>
+                } @else if (staffService.canManage()) {
+                  <span
+                    class="inline-flex items-center justify-center w-8 h-8 rounded-md text-on-surface-variant/40"
+                    title="Managers cannot be removed from the roster"
+                  >
+                    <span class="material-symbols-outlined text-[16px]">lock</span>
+                  </span>
+                }
               </div>
             </div>
           }
@@ -292,6 +345,10 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                 <div class="text-xs text-error">Passwords do not match.</div>
               }
 
+              @if (submitError(); as err) {
+                <div class="text-xs text-error">{{ err }}</div>
+              }
+
               <div class="grid grid-cols-2 gap-3">
                 <label class="block">
                   <span
@@ -331,19 +388,20 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                 <button
                   type="button"
                   (click)="closeAdd()"
-                  class="px-3 h-10 rounded-lg border border-outline-variant bg-transparent text-on-surface text-sm font-semibold hover:bg-surface-container-highest hover:border-outline transition-colors"
+                  [disabled]="submitting()"
+                  class="px-3 h-10 rounded-lg border border-outline-variant bg-transparent text-on-surface text-sm font-semibold hover:bg-surface-container-highest hover:border-outline transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  [disabled]="!canSubmit()"
+                  [disabled]="!canSubmit() || submitting()"
                   class="inline-flex items-center gap-1.5 px-3 h-10 rounded-lg bg-primary text-on-primary text-sm font-semibold hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <span class="material-symbols-outlined text-[16px]"
-                    >person_add</span
-                  >
-                  Add to roster
+                  <span class="material-symbols-outlined text-[16px]">{{
+                    submitting() ? 'progress_activity' : 'person_add'
+                  }}</span>
+                  {{ submitting() ? 'Adding…' : 'Add to roster' }}
                 </button>
               </div>
             </form>
@@ -405,8 +463,9 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     </section>
   `,
 })
-export class StaffListComponent {
+export class StaffListComponent implements OnInit {
   protected readonly alerts = inject(AlertsService);
+  protected readonly staffService = inject(StaffService);
 
   protected readonly roleFilter = signal<StaffRole | 'all'>('all');
   protected readonly query = signal<string>('');
@@ -415,30 +474,30 @@ export class StaffListComponent {
   protected readonly form = signal<AddForm>({ ...EMPTY_FORM });
   protected readonly qrTarget = signal<StaffMember | null>(null);
 
+  protected readonly submitting = signal<boolean>(false);
+  protected readonly submitError = signal<string | null>(null);
+  protected readonly pendingRemove = signal<string | null>(null);
+
   protected readonly roleValues = Object.keys(ROLE_META) as StaffRole[];
 
   protected readonly filtered = computed<StaffMember[]>(() => {
     const role = this.roleFilter();
     const q = this.query().trim().toLowerCase();
 
-    return [...this.alerts.staff()]
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .filter((item) => {
-        if (role !== 'all' && item.role !== role) return false;
-        if (!q) return true;
-        return (
-          item.name.toLowerCase().includes(q) ||
-          (item.email ?? '').toLowerCase().includes(q) ||
-          item.phone.toLowerCase().includes(q)
-        );
-      });
+    return this.staffService.staff().filter((item) => {
+      if (role !== 'all' && item.role !== role) return false;
+      if (!q) return true;
+      return (
+        item.name.toLowerCase().includes(q) ||
+        (item.email ?? '').toLowerCase().includes(q) ||
+        item.phone.toLowerCase().includes(q)
+      );
+    });
   });
 
   protected readonly passwordMismatch = computed(() => {
     const f = this.form();
-    return (
-      f.repeatPassword.length > 0 && f.password !== f.repeatPassword
-    );
+    return f.repeatPassword.length > 0 && f.password !== f.repeatPassword;
   });
 
   protected readonly canSubmit = computed(() => {
@@ -451,6 +510,14 @@ export class StaffListComponent {
       f.phone.trim().length > 0
     );
   });
+
+  ngOnInit(): void {
+    void this.staffService.refresh();
+  }
+
+  protected refresh(): void {
+    void this.staffService.refresh();
+  }
 
   protected meta(role: StaffRole): RoleMeta {
     return ROLE_META[role];
@@ -480,10 +547,12 @@ export class StaffListComponent {
 
   protected openAdd(): void {
     this.form.set({ ...EMPTY_FORM });
+    this.submitError.set(null);
     this.addOpen.set(true);
   }
 
   protected closeAdd(): void {
+    if (this.submitting()) return;
     this.addOpen.set(false);
   }
 
@@ -491,17 +560,46 @@ export class StaffListComponent {
     this.form.set({ ...this.form(), ...partial });
   }
 
-  protected submitAdd(): void {
-    if (!this.canSubmit()) return;
+  protected async submitAdd(): Promise<void> {
+    if (!this.canSubmit() || this.submitting()) return;
     const f = this.form();
-    const member = this.alerts.addStaff({
-      name: f.name.trim(),
-      email: f.email.trim(),
-      role: f.role,
-      phone: f.phone.trim(),
-    });
-    this.closeAdd();
-    this.qrTarget.set(member);
+    this.submitting.set(true);
+    this.submitError.set(null);
+    try {
+      const member = await this.staffService.add({
+        name: f.name.trim(),
+        email: f.email.trim(),
+        password: f.password,
+        role: f.role,
+        phone: f.phone.trim(),
+      });
+      this.alerts.showToast(`${member.name} added to roster`);
+      this.addOpen.set(false);
+      this.qrTarget.set(member);
+    } catch (err) {
+      this.submitError.set(
+        err instanceof Error ? err.message : 'Could not create user.',
+      );
+    } finally {
+      this.submitting.set(false);
+    }
+  }
+
+  protected async confirmRemove(member: StaffMember): Promise<void> {
+    if (this.pendingRemove()) return;
+    const ok = window.confirm(`Remove ${member.name} from the roster?`);
+    if (!ok) return;
+    this.pendingRemove.set(member.id);
+    try {
+      await this.staffService.remove(member.id);
+      this.alerts.showToast(`${member.name} removed`);
+    } catch (err) {
+      this.alerts.showToast(
+        err instanceof Error ? err.message : 'Remove failed',
+      );
+    } finally {
+      this.pendingRemove.set(null);
+    }
   }
 
   protected openQr(member: StaffMember): void {
