@@ -58,7 +58,14 @@ services:
       - "3001:3000"
     networks: [vireal-net]
 
+  # Optional Python gateway that fronts the AI vision service. Kept behind
+  # the `gateway` profile because its source lives outside this repo
+  # (../gateway) and isn't checked out on every deployment target. Start it
+  # with `docker compose --profile gateway up -d` on machines that have the
+  # sibling repo cloned; nginx proxies /gateway/* with lazy DNS so the web
+  # container stays healthy when this service is absent.
   gateway:
+    profiles: ["gateway"]
     build: ../gateway
     image: vireal-gateway:latest
     container_name: vireal-gateway
@@ -94,14 +101,15 @@ services:
     restart: unless-stopped
     depends_on:
       - api
-      - gateway
     environment:
       API_URL: http://api:3000
-    # Local dev: expose the Angular SPA on http://localhost:8080 so we can
-    # open the dashboard without Traefik. Production still routes via
-    # Traefik on :443.
+    # Local dev: expose the Angular SPA on http://localhost:${WEB_HOST_PORT}
+    # so we can open the dashboard without Traefik. In production the SPA
+    # is reached via Traefik on :443 through the `proxy` network, so this
+    # host binding is purely for convenience. Default 8100 avoids collisions
+    # with Traefik's own :8080 dashboard on shared VMs; override via env.
     ports:
-      - "8080:80"
+      - "8100:80"
     # Traefik's docker provider skips containers whose health status isn't
     # `healthy`. The Dockerfile's wget-based healthcheck has been flaky on
     # BusyBox and leaves the container stuck in `starting`, so disable it
