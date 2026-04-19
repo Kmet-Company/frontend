@@ -332,9 +332,9 @@ FROM   venue v
 JOIN   (VALUES
   -- video_url / image_url: same-origin paths only (no CDN) so local Docker matches hosted assets.
   ('cam-main',     'Main Floor',     'Dance Floor', 'layers',         NULL, '/cam-main.mp4',        612, 'high'),
-  ('cam-bar',      'Bar Area',       'Main Bar',    'local_bar',      NULL, '/bilijard.mp4',        184, 'medium'),
+  ('cam-bar',      'Bar Area',       'Main Bar',    'local_bar',      NULL, '/no_fight_black_and_white.mp4',        184, 'medium'),
   ('cam-entrance', 'Entrance Queue', 'Front Door',  'groups',         NULL, '/kocani.mp4',           96, 'medium'),
-  ('cam-stage',    'Stage Crowd',    'Main Stage',  'theater_comedy', NULL, '/fight_0014.mp4',    842, 'high')
+  ('cam-stage',    'Stage Crowd',    'Main Stage',  'theater_comedy', NULL, '/msos.mp4',    842, 'high')
 ) AS c(code, label, zone, icon, image_url, video_url, occupancy, density) ON TRUE
 WHERE v.code = 'foundry-north-hall';
 
@@ -392,7 +392,7 @@ JOIN (VALUES
           46.0511, 14.5051, 12,
           NULL,
           'active', 'Unit 14 · Officer Miller', 3,
-          '{"x":0.34,"y":0.28,"width":0.28,"height":0.46,"label":"Conflict 82%"}',
+          NULL,
           'cam-bar'),
   ('403', 'Dense crowd forming near stage',
           'Crowd density crossing the safe threshold in front of the main stage left barrier.',
@@ -416,7 +416,7 @@ JOIN (VALUES
           NULL, NULL, 2,
           NULL,
           'active', 'Medic 02 · R. Okafor', 1,
-          '{"x":0.48,"y":0.54,"width":0.14,"height":0.22,"label":"Person down 74%"}',
+          NULL,
           'cam-main'),
   ('406', 'Loitering near fire exit',
           'Same individual blocking emergency exit B for over 3 minutes despite signage.',
