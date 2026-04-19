@@ -29,7 +29,7 @@ import {
 } from '../../services/ai-gateway.service';
 import { BoundingBox, CameraFeed } from '../../models/venue.models';
 import { resolveCameraVideoUrl } from '../../utils/camera-default-video';
-import { VideoChunkAnalysisService } from '../../services/video-chunk-analysis.service';
+import { VideoChunkAnalysisService, toAbsoluteVideoUrl, captureStreamFromVideo } from '../../services/video-chunk-analysis.service';
 
 @Component({
   selector: 'va-dashboard',
@@ -639,7 +639,7 @@ export class DashboardComponent {
       });
   }
 
-  /** Manual run: same as auto but clears the “already ran” guard for this camera. */
+  /** Manual run: real-time analysis with WebSocket streaming. */
   protected analyzeChunksFromBrowser(): void {
     const id =
       this.alerts.selectedCameraId() ?? this.alerts.cameras()[0]?.id;
@@ -647,7 +647,7 @@ export class DashboardComponent {
       this.alerts.showToast('No camera');
       return;
     }
-    void this.runChunkAnalysis(id, { force: true });
+    void this.runRealtimeChunkAnalysis(id, { force: true });
   }
 
   /**
@@ -729,6 +729,208 @@ export class DashboardComponent {
             : `3s chunk analysis failed: ${msg.slice(0, 120)}`,
         );
       });
+  }
+
+  /**
+   * Real-time analysis: Records ~3s WebM slices and sends via WebSocket
+   * to get immediate results from the AI models.
+   */
+  private runRealtimeChunkAnalysis(
+    cameraId: string,
+    opts: { auto?: boolean; force?: boolean },
+  ): Promise<void> {
+    if (this.chunkAnalyzing()) {
+      return Promise.resolve();
+    }
+    if (opts.auto && this.autoChunkDoneForId() === cameraId) {
+      return Promise.resolve();
+    }
+    const cam = this.alerts.cameras().find((c) => c.id === cameraId);
+    if (!cam) {
+      if (!opts.auto) {
+        this.alerts.showToast('No camera');
+      }
+      return Promise.resolve();
+    }
+    if (opts.force) {
+      this.autoChunkDoneForId.set(null);
+    }
+
+    const url = resolveCameraVideoUrl(cam);
+    this.chunkLogLines.set([]);
+    this.chunkProgress.set(null);
+    this.chunkAnalyzing.set(true);
+    if (!opts.auto) {
+      this.alerts.showToast(
+        `${cam.label}: Real-time 3s chunking started. Watch the log panel below.`,
+      );
+    }
+
+    return this.runRealtimeAnalysis(url, cam.id, (line) => {
+      this.chunkLogLines.update((lines) => [...lines, line]);
+    });
+  }
+
+  private runRealtimeAnalysis(
+    videoUrl: string,
+    cameraCode: string,
+    onLine: (line: string) => void,
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const abs = toAbsoluteVideoUrl(videoUrl);
+      const video = document.createElement('video');
+      video.crossOrigin = 'anonymous';
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = 'auto';
+      video.src = abs;
+
+      let websocket: WebSocket | null = null;
+      let subscription: any = null;
+
+      const cleanup = () => {
+        if (subscription) {
+          subscription.unsubscribe();
+        }
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+          websocket.close();
+        }
+        video.remove();
+        this.chunkAnalyzing.set(false);
+      };
+
+      video.onloadedmetadata = () => {
+        const duration = Number.isFinite(video.duration) ? video.duration : 0;
+        if (duration <= 0) {
+          cleanup();
+          reject(new Error('Video duration is not available'));
+          return;
+        }
+
+        const totalChunks = Math.max(1, Math.ceil(duration / 3));
+        onLine(
+          `Real-time analysis: ${duration.toFixed(1)}s → ${totalChunks} chunk(s) × 3s (WebSocket streaming)`,
+        );
+
+        // Start WebSocket connection
+        const realtimeConnection = this.gateway.analyzeRealtime(cameraCode);
+        
+        subscription = realtimeConnection.observable.subscribe({
+          next: (result: any) => {
+            if (result.error) {
+              onLine(`ERROR: ${result.error}`);
+            } else {
+              const summary = this.formatRealtimeResult(result);
+              onLine(`[${result.timestamp}] ${summary}`);
+            }
+          },
+          error: (error) => {
+            onLine(`WebSocket error: ${error}`);
+            cleanup();
+            reject(error);
+          },
+          complete: () => {
+            onLine('Real-time analysis completed');
+            cleanup();
+            resolve();
+          }
+        });
+
+        // Get the WebSocket instance and start recording
+        realtimeConnection.websocket.then((ws) => {
+          websocket = ws;
+          // Start recording chunks
+          this.recordAndSendChunks(video, websocket, totalChunks, onLine, () => {
+            // All chunks sent, close WebSocket after a delay
+            setTimeout(() => {
+              if (websocket && websocket.readyState === WebSocket.OPEN) {
+                websocket.close();
+              }
+            }, 1000);
+          });
+        });
+      };
+
+      video.onerror = () => {
+        cleanup();
+        reject(new Error('Failed to load video'));
+      };
+    });
+  }
+
+  private recordAndSendChunks(
+    video: HTMLVideoElement,
+    websocket: WebSocket | null,
+    totalChunks: number,
+    onLine: (line: string) => void,
+    onComplete: () => void,
+  ): void {
+    let currentChunk = 0;
+
+    const recordNextChunk = () => {
+      if (currentChunk >= totalChunks) {
+        onComplete();
+        return;
+      }
+
+      const startTime = currentChunk * 3;
+      const chunkDuration = Math.min(3, video.duration - startTime);
+
+      video.currentTime = startTime;
+
+      const chunks: Blob[] = [];
+      const mediaRecorder = new MediaRecorder(captureStreamFromVideo(video));
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        blob.arrayBuffer().then((buffer) => {
+          if (websocket && websocket.readyState === WebSocket.OPEN) {
+            this.gateway.sendVideoChunk(websocket, buffer);
+            onLine(`Sent chunk ${currentChunk + 1}/${totalChunks} (${blob.size} bytes)`);
+          }
+        });
+
+        currentChunk++;
+        // Small delay before next chunk
+        setTimeout(recordNextChunk, 100);
+      };
+
+      // Start recording
+      mediaRecorder.start();
+
+      // Stop after chunk duration
+      setTimeout(() => {
+        mediaRecorder.stop();
+      }, chunkDuration * 1000);
+    };
+
+    // Wait for video to be ready
+    video.onseeked = () => {
+      recordNextChunk();
+    };
+  }
+
+  private formatRealtimeResult(result: any): string {
+    if (result.result?.results) {
+      // Violence detection result
+      const r = result.result.results[0];
+      if (r) {
+        return `Violence: ${r.prediction} (${(r.violent_probability * 100).toFixed(1)}% violent)`;
+      }
+    } else if (result.result?.results) {
+      // Fire detection result
+      const r = result.result.results[0];
+      if (r) {
+        return `Fire: ${r.fire_detected ? 'DETECTED' : 'None'} (${r.max_fire_confidence?.toFixed(2) || 0} confidence)`;
+      }
+    }
+    return `Result: ${JSON.stringify(result.result)}`;
   }
 
   protected thumbnailClass(camera: CameraFeed): string {

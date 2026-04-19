@@ -93,6 +93,7 @@ services:
       # STATIC_ASSET_BASE=http://host.docker.internal:4200
       STATIC_ASSET_BASE: ${STATIC_ASSET_BASE:-http://web}
       AI_VISION_URL: ${AI_VISION_URL:-http://ai-vision:8000}
+      AI_FIRE_URL: ${AI_FIRE_URL:-http://ai-vision:8000}
       # Periodic analysis (seconds). 0 = disabled; use POST /gateway/analyze/{code} from UI.
       ANALYSIS_INTERVAL_SEC: ${ANALYSIS_INTERVAL_SEC:-0}
     expose:

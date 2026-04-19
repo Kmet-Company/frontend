@@ -14,6 +14,8 @@ function toAbsoluteVideoUrl(url: string): string {
   return `${window.location.origin}${path}`;
 }
 
+export { toAbsoluteVideoUrl, captureStreamFromVideo };
+
 function waitLoadedMetadata(video: HTMLVideoElement): Promise<void> {
   return new Promise((resolve, reject) => {
     if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
