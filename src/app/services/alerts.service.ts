@@ -620,7 +620,9 @@ export class AlertsService {
     // Promoted alerts keep the guest report's reference (e.g. "GR-8421")
     // so operators can trace an alert back to the mobile submission.
     const alertReference = report.reference;
-    const promotedTitle = `Guest report: ${report.title}`;
+    // Android submits the category label (e.g. "Other", "Medical") as the
+    // title, so we use it verbatim — no "Guest report:" prefix.
+    const promotedTitle = report.title;
     const severity = this.severityFromPriority(report.priority);
     const risk = this.riskFromPriority(report.priority);
 
@@ -633,7 +635,7 @@ export class AlertsService {
       risk,
       confidence: 70,
       location: report.location,
-      zone: report.location,
+      zone: '',
       cameraId: this.cameras()[0]?.id ?? '',
       detectedAt: report.submittedAt,
       previewUrl: '',
@@ -680,7 +682,7 @@ export class AlertsService {
             risk,
             confidence: 70,
             location: report.location,
-            zone: report.location,
+            zone: '',
             sourceGuestReportId: report.id,
           })
           .pipe(
