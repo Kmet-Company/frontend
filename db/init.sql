@@ -337,10 +337,10 @@ SELECT v.id, c.code, c.label, c.zone, c.icon, c.image_url, c.video_url, c.occupa
 FROM   venue v
 JOIN   (VALUES
   -- video_url / image_url: same-origin paths only (no CDN) so local Docker matches hosted assets.
-  ('cam-main',     'Main Floor',     'Dance Floor', 'layers',         NULL, '/cam-main.mp4',        612, 'high'),
-  ('cam-bar',      'Bar Area',       'Main Bar',    'local_bar',      NULL, '/no_fight_black_and_white.mp4',        184, 'medium'),
-  ('cam-entrance', 'Entrance Queue', 'Front Door',  'groups',         NULL, '/kocani.mp4',           96, 'medium'),
-  ('cam-stage',    'Stage Crowd',    'Main Stage',  'theater_comedy', NULL, '/msos.mp4',    842, 'high')
+  ('cam-main',     'Main Floor',     'Dance Floor', 'layers',         NULL, '/cam-main.mp4',        31, 'high'),
+  ('cam-bar',      'Bar Area',       'Main Bar',    'local_bar',      NULL, '/no_fight_black_and_white.mp4',        67, 'medium'),
+  ('cam-entrance', 'Entrance Queue', 'Front Door',  'groups',         NULL, '/kocani.mp4',           0, 'medium'),
+  ('cam-stage',    'Stage Crowd',    'Main Stage',  'theater_comedy', NULL, '/msos.mp4',    50, 'high')
 ) AS c(code, label, zone, icon, image_url, video_url, occupancy, density) ON TRUE
 WHERE v.code = 'foundry-north-hall';
 
