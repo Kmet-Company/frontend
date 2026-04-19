@@ -94,6 +94,8 @@ type GuestReportRow = {
   submitted_at: string;
   status: GuestReportStatus;
   priority: GuestReportPriority;
+  photo_base64: string | null;
+  photo_mime_type: string | null;
 };
 
 @Injectable({ providedIn: 'root' })
@@ -326,5 +328,8 @@ export class ApiService {
     status: row.status,
     priority: row.priority,
     guestEmail: row.guest_email,
+    photoUrl: row.photo_base64
+      ? `data:${row.photo_mime_type ?? 'image/jpeg'};base64,${row.photo_base64}`
+      : undefined,
   });
 }

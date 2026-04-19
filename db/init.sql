@@ -192,6 +192,12 @@ CREATE TABLE guest_report (
   guest_email         TEXT                    NOT NULL DEFAULT '',
   guest_device_id     TEXT,                                      -- opaque device fingerprint, optional
 
+  -- Optional photo evidence captured by the mobile app. Stored inline as a
+  -- base64-encoded blob so the dashboard can render it directly via a
+  -- `data:` URL without needing object storage.
+  photo_base64        TEXT,
+  photo_mime_type     TEXT,
+
   submitted_at        TIMESTAMPTZ             NOT NULL DEFAULT now(),
   status              guest_report_status     NOT NULL DEFAULT 'new',
   priority            guest_report_priority   NOT NULL DEFAULT 'low',
