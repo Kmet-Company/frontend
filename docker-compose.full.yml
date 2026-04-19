@@ -1,0 +1,86 @@
+# Optional “everything on one mesh” override: AI models load first, then gateway,
+# then nginx `web` (so /gateway/* is not hit while models are still downloading).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.full.yml up --build -d
+#
+# Do not also run ../ai/docker-compose.yml on the same host: the AI container
+# name would collide. Use either this merged stack or the separate ai + gateway
+# folders, not both.
+#
+# GPU: add the ai CUDA override as a third file:
+#   docker compose -f docker-compose.yml -f docker-compose.full.yml \
+#     -f ../ai/docker-compose.cuda.yml up --build -d
+# (The CUDA file overrides `ai-vision` build/image/env/GPU only.)
+
+services:
+  ai-vision:
+    image: vireal-ai-vision:latest
+    build:
+      context: ../ai
+      dockerfile: Dockerfile
+    container_name: vireal-ai-vision
+    restart: unless-stopped
+    expose:
+      - "8000"
+    ports:
+      - "127.0.0.1:8101:8000"
+    volumes:
+      - vireal-hf-cache:/root/.cache/huggingface
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import json,urllib.request;u=urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=10);d=json.load(u);exit(0 if (d.get('models_ready') or d.get('video_mae_loaded')) else 1)\"",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 40
+      start_period: 600s
+    networks: [vireal-net]
+
+  gateway:
+    image: vireal-gateway:latest
+    build:
+      context: ../gateway
+      dockerfile: Dockerfile
+    container_name: vireal-gateway
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      POSTGREST_URL: http://api:3000
+      STATIC_ASSET_BASE: http://web
+      AI_VISION_URL: http://ai-vision:8000
+      AI_FIRE_URL: http://ai-vision:8000
+      ANALYSIS_INTERVAL_SEC: "0"
+      WAIT_FOR_AI_MODELS: "1"
+    expose:
+      - "8000"
+    ports:
+      - "127.0.0.1:8102:8000"
+    depends_on:
+      api:
+        condition: service_started
+      ai-vision:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)\"",
+        ]
+      interval: 10s
+      timeout: 6s
+      retries: 6
+      start_period: 900s
+    networks: [vireal-net]
+
+  web:
+    depends_on:
+      api:
+        condition: service_started
+      gateway:
+        condition: service_healthy
+
+volumes:
+  vireal-hf-cache:

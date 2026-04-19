@@ -37,6 +37,21 @@ export interface ViolencePredictResponse {
   }>;
 }
 
+/** Response when `camera_code` routes to fire (YOLO windows). */
+export interface FirePredictResponse {
+  mock?: boolean;
+  filename?: string;
+  results?: Array<{
+    start_time: number;
+    end_time: number;
+    fire_detected?: boolean;
+    max_fire_confidence?: number;
+    frames_scored?: number;
+  }>;
+}
+
+export type PredictUploadResponse = ViolencePredictResponse | FirePredictResponse;
+
 export interface RealtimeAnalysisResult {
   camera_code: string;
   timestamp: string;
@@ -72,13 +87,22 @@ export class AiGatewayService {
     );
   }
 
-  /** Upload a short clip (e.g. 3s WebM from MediaRecorder) to the vision model. */
-  predictUpload(blob: Blob, filename: string): Observable<ViolencePredictResponse> {
+  /**
+   * Upload a short clip (e.g. 3s WebM from MediaRecorder).
+   * Pass `cameraCode` so the gateway routes to fire (e.g. `cam-entrance`) vs violence (`cam-main`).
+   */
+  predictUpload(
+    blob: Blob,
+    filename: string,
+    cameraCode?: string,
+  ): Observable<PredictUploadResponse> {
     const body = new FormData();
     body.append('file', blob, filename);
-    // First request can block on HF download + model load + CPU decode/inference for many minutes.
+    const q = cameraCode?.trim()
+      ? `?camera_code=${encodeURIComponent(cameraCode.trim())}`
+      : '';
     return this.http
-      .post<ViolencePredictResponse>(`${this.base}/predict-upload`, body)
+      .post<PredictUploadResponse>(`${this.base}/predict-upload${q}`, body)
       .pipe(timeout({ first: 25 * 60 * 1000 }));
   }
 

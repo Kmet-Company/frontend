@@ -3,6 +3,8 @@ import { firstValueFrom } from 'rxjs';
 
 import {
   AiGatewayService,
+  FirePredictResponse,
+  PredictUploadResponse,
   ViolencePredictResponse,
 } from './ai-gateway.service';
 
@@ -57,9 +59,32 @@ function pickRecorderMime(): string {
   return '';
 }
 
+function isFireResponse(res: PredictUploadResponse): res is FirePredictResponse {
+  const r0 = res.results?.[0];
+  return !!r0 && 'fire_detected' in r0;
+}
+
+export interface ChunkAnalysisOptions {
+  /** Gateway routing: `cam-entrance` → fire, `cam-main` → violence, etc. */
+  cameraCode?: string;
+  /** For callbacks / logging (tile id). */
+  cameraId?: string;
+  /** Log prefix, e.g. `[violence]` */
+  logPrefix?: string;
+  onDetection?: (payload: {
+    kind: 'violence' | 'fire';
+    cameraId: string;
+    cameraCode: string;
+    startSec: number;
+    endSec: number;
+    summary: string;
+    response: PredictUploadResponse;
+  }) => void;
+}
+
 /**
  * Records the &lt;video&gt; timeline in fixed wall-clock slices via MediaRecorder
- * and POSTs each blob to the gateway → vision model.
+ * and POSTs each blob to the gateway → violence or fire model (via `cameraCode`).
  */
 @Injectable({ providedIn: 'root' })
 export class VideoChunkAnalysisService {
@@ -71,7 +96,16 @@ export class VideoChunkAnalysisService {
     videoUrl: string,
     onLine: (line: string) => void,
     onChunkDone?: (index: number, total: number, summary: string) => void,
+    opts?: ChunkAnalysisOptions,
   ): Promise<void> {
+    const prefix = opts?.logPrefix ? `${opts.logPrefix} ` : '';
+    const cameraCode = opts?.cameraCode?.trim();
+    const cameraId = opts?.cameraId?.trim() ?? '';
+    const routeHint =
+      cameraCode && ['cam-entrance', 'kocani', 'kochani'].includes(cameraCode)
+        ? 'fire YOLO'
+        : 'violence VideoMAE';
+
     const abs = toAbsoluteVideoUrl(videoUrl);
     const video = document.createElement('video');
     video.crossOrigin = 'anonymous';
@@ -89,10 +123,10 @@ export class VideoChunkAnalysisService {
 
       const totalChunks = Math.max(1, Math.ceil(duration / this.chunkSeconds));
       onLine(
-        `Source ${duration.toFixed(1)}s → ${totalChunks} chunk(s) × ${this.chunkSeconds}s (hidden <video> + MediaRecorder → POST /gateway/predict-upload → model)`,
+        `${prefix}Source ${duration.toFixed(1)}s → ${totalChunks} chunk(s) × ${this.chunkSeconds}s → /gateway/predict-upload (${routeHint}${cameraCode ? `, camera_code=${cameraCode}` : ''})`,
       );
       console.info(
-        `[3s-chunk-ai] start url=${abs} chunks=${totalChunks} step=${this.chunkSeconds}s`,
+        `[3s-chunk-ai] start url=${abs} chunks=${totalChunks} camera=${cameraCode ?? 'default'}`,
       );
 
       for (let i = 0; i < totalChunks; i++) {
@@ -103,22 +137,26 @@ export class VideoChunkAnalysisService {
         }
 
         onLine(
-          `Chunk ${i + 1}/${totalChunks}: record ${start.toFixed(2)}s–${(start + len).toFixed(2)}s …`,
+          `${prefix}Chunk ${i + 1}/${totalChunks}: record ${start.toFixed(2)}s–${(start + len).toFixed(2)}s …`,
         );
         const blob = await this.recordSegment(video, start, len);
-        onLine(`  → ${(blob.size / 1024).toFixed(0)} KiB, uploading …`);
+        onLine(`${prefix}  → ${(blob.size / 1024).toFixed(0)} KiB, uploading …`);
         onLine(
-          i === 0
-            ? '  → waiting for vision service (chunk 1 often includes Hugging Face download + model load + ffmpeg + CPU inference; can take many minutes — check ai-vision logs)…'
-            : '  → waiting for inference (CPU; each chunk can take a while)…',
+          `${prefix}  → ` +
+            (i === 0
+              ? 'waiting for ai-vision (chunk 1: cold load + ffmpeg + inference can take minutes)…'
+              : 'waiting for inference…'),
         );
 
         const res = await firstValueFrom(
-          this.gateway.predictUpload(blob, `chunk-${i}.webm`),
+          this.gateway.predictUpload(blob, `chunk-${i}.webm`, cameraCode),
         );
         const summary = this.formatResponse(start, len, res);
-        onLine(`  ← ${summary}`);
+        onLine(`${prefix}  ← ${summary}`);
         console.info(`[3s-chunk-ai] chunk ${i + 1}/${totalChunks} done`, summary);
+
+        this.emitDetectionIfNeeded(start, len, res, opts, summary);
+
         onChunkDone?.(i, totalChunks, summary);
       }
     } finally {
@@ -128,16 +166,62 @@ export class VideoChunkAnalysisService {
     }
   }
 
+  private emitDetectionIfNeeded(
+    startSec: number,
+    lenSec: number,
+    res: PredictUploadResponse,
+    opts: ChunkAnalysisOptions | undefined,
+    summary: string,
+  ): void {
+    if (!opts?.onDetection || !opts.cameraCode) {
+      return;
+    }
+    const cameraId = opts.cameraId?.trim() || opts.cameraCode;
+    if (isFireResponse(res)) {
+      const hit = res.results?.some((r) => r.fire_detected) ?? false;
+      if (hit) {
+        opts.onDetection({
+          kind: 'fire',
+          cameraId,
+          cameraCode: opts.cameraCode,
+          startSec,
+          endSec: startSec + lenSec,
+          summary,
+          response: res,
+        });
+      }
+      return;
+    }
+    const r0 = (res as ViolencePredictResponse).results?.[0];
+    if (r0?.prediction === 'Violent') {
+      opts.onDetection({
+        kind: 'violence',
+        cameraId,
+        cameraCode: opts.cameraCode,
+        startSec,
+        endSec: startSec + lenSec,
+        summary,
+        response: res,
+      });
+    }
+  }
+
   private formatResponse(
     startSec: number,
     lenSec: number,
-    res: ViolencePredictResponse,
+    res: PredictUploadResponse,
   ): string {
     const range = `${startSec.toFixed(1)}s–${(startSec + lenSec).toFixed(1)}s`;
     if (res.mock) {
       return `${range} mock=true ${JSON.stringify(res)}`;
     }
-    const r0 = res.results?.[0];
+    if (isFireResponse(res)) {
+      const rows = res.results ?? [];
+      const anyFire = rows.some((r) => r.fire_detected);
+      const maxC = Math.max(0, ...rows.map((r) => r.max_fire_confidence ?? 0));
+      return `${range} fire=${anyFire ? 'YES' : 'no'} · max_conf=${maxC.toFixed(3)}`;
+    }
+    const r0 = (res as ViolencePredictResponse).results?.[0];
     if (!r0) {
       return `${range} ${JSON.stringify(res)}`;
     }

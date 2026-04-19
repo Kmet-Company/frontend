@@ -855,6 +855,59 @@ export class AlertsService {
     this.toastTimer = setTimeout(() => this._toast.set(null), 3200);
   }
 
+  /** Throttle map: `${cameraId}:${kind}` → epoch ms */
+  private readonly _aiAlertThrottle = new Map<string, number>();
+  private readonly _aiAlertMinGapMs = 45_000;
+
+  /**
+   * Surfaces an AI hit in the active alert rail (local-only; demo / hackathon).
+   * Throttled per camera + kind so sustained fire does not flood the list.
+   */
+  addLocalAiDetectionAlert(input: {
+    kind: 'fire' | 'violence';
+    cameraId: string;
+    title: string;
+    description: string;
+    confidencePct: number;
+  }): void {
+    const key = `${input.cameraId}:${input.kind}`;
+    const now = Date.now();
+    const last = this._aiAlertThrottle.get(key) ?? 0;
+    if (now - last < this._aiAlertMinGapMs) {
+      return;
+    }
+    this._aiAlertThrottle.set(key, now);
+
+    const cam = this._cameras().find((c) => c.id === input.cameraId);
+    const id = `ai-${input.kind}-${now}`;
+    const alert: VenueAlert = {
+      reference: String(Math.floor(now / 1000) % 100000),
+      id,
+      title: input.title,
+      description: input.description,
+      severity: 'critical',
+      risk: 'high',
+      confidence: Math.min(99, Math.max(1, Math.round(input.confidencePct))),
+      location: cam?.label ?? input.cameraId,
+      zone: cam?.zone ?? '',
+      cameraId: input.cameraId,
+      detectedAt: new Date(),
+      previewUrl: '',
+      status: 'active',
+      events: [
+        {
+          at: new Date(),
+          kind: 'detection',
+          title: 'AI detection',
+          description: input.description,
+        },
+      ],
+      notes: [],
+    };
+    this._alerts.update((list) => [alert, ...list]);
+    this.showToast(input.title);
+  }
+
   private minutesAgo(minutes: number): Date {
     return new Date(Date.now() - minutes * 60_000);
   }

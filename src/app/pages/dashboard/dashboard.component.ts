@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -24,8 +25,10 @@ import { ToastComponent } from '../../components/toast/toast.component';
 import { AlertsService } from '../../services/alerts.service';
 import {
   AiGatewayService,
+  FirePredictResponse,
   GatewayDetectionsResponse,
   GatewayHealth,
+  ViolencePredictResponse,
 } from '../../services/ai-gateway.service';
 import { BoundingBox, CameraFeed } from '../../models/venue.models';
 import { resolveCameraVideoUrl } from '../../utils/camera-default-video';
@@ -178,7 +181,11 @@ import { VideoChunkAnalysisService, toAbsoluteVideoUrl, captureStreamFromVideo }
               <p class="text-on-surface-variant mt-1 leading-snug max-w-[52rem]">
                 Tiles are previews; chunking uses a hidden player + WebM →
                 <code class="text-[10px] bg-surface-container-high px-1 rounded">/gateway/predict-upload</code>
-                (server transcodes WebM for the model). Console:
+                with
+                <code class="text-[10px] bg-surface-container-high px-1 rounded">camera_code</code>
+                so Main Floor uses violence VideoMAE and Entrance uses fire YOLO. On load, both run
+                <strong class="text-on-surface">in parallel in the background</strong>; hits appear as
+                critical alerts. Console:
                 <code class="text-[10px]">[3s-chunk-ai]</code>
               </p>
             </div>
@@ -192,6 +199,19 @@ import { VideoChunkAnalysisService, toAbsoluteVideoUrl, captureStreamFromVideo }
               </div>
             }
           </div>
+          @if (backgroundLogLines().length > 0 || backgroundRunning() > 0) {
+            <div
+              class="mt-2 max-h-32 overflow-y-auto rounded-lg bg-surface-container-lowest/80 p-2 font-mono text-[10px] leading-snug text-on-surface border border-outline-variant/30"
+            >
+              <div class="text-primary font-semibold mb-1">
+                Background · Main (violence) + Entrance (fire)
+              </div>
+              @if (backgroundRunning() > 0) {
+                <div class="text-on-surface-variant mb-1">Running…</div>
+              }
+              <pre class="whitespace-pre-wrap m-0 p-0">{{ backgroundLogText() }}</pre>
+            </div>
+          }
           @if (chunkLogLines().length > 0 || chunkAnalyzing()) {
             <div
               class="mt-2 max-h-40 overflow-y-auto rounded-lg bg-surface-container-lowest p-2 font-mono text-[10px] leading-snug text-on-surface"
@@ -395,12 +415,22 @@ export class DashboardComponent {
   private readonly chunkAnalysis = inject(VideoChunkAnalysisService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  /** Avoid stacking duplicate background jobs if the dashboard is re-created. */
+  private parallelBackgroundStarted = false;
 
   /** Log lines from hidden video → 3s MediaRecorder → `/gateway/predict-upload`. */
   protected readonly chunkLogLines = signal<string[]>([]);
   protected readonly chunkAnalyzing = signal(false);
   protected readonly chunkLogText = computed(() =>
     this.chunkLogLines().join('\n'),
+  );
+
+  /** Parallel hidden-video runs: `cam-main` (violence) + `cam-entrance` (fire). */
+  protected readonly backgroundLogLines = signal<string[]>([]);
+  /** Number of background pipelines still running (0–2). */
+  protected readonly backgroundRunning = signal(0);
+  protected readonly backgroundLogText = computed(() =>
+    this.backgroundLogLines().join('\n'),
   );
   /** Current chunk index (1-based), total, and last model summary line. */
   protected readonly chunkProgress = signal<{
@@ -501,6 +531,9 @@ export class DashboardComponent {
         if (!sel || cams.length === 0) {
           return;
         }
+        if (sel === 'cam-main' || sel === 'cam-entrance') {
+          return;
+        }
         if (this.autoChunkDoneForId() === sel) {
           return;
         }
@@ -525,6 +558,111 @@ export class DashboardComponent {
       },
       { allowSignalWrites: true },
     );
+
+    afterNextRender(() => {
+      void this.startParallelBackgroundSurveillance();
+    });
+  }
+
+  /**
+   * After first paint: scan Main Floor with violence and Entrance (kocani) with fire YOLO
+   * in parallel; positive chunks create throttled critical alerts.
+   */
+  private startParallelBackgroundSurveillance(): void {
+    if (this.parallelBackgroundStarted) {
+      return;
+    }
+    this.parallelBackgroundStarted = true;
+
+    const cams = this.alerts.cameras();
+    const main = cams.find((c) => c.id === 'cam-main');
+    const entrance = cams.find((c) => c.id === 'cam-entrance');
+    if (!main || !entrance) {
+      this.parallelBackgroundStarted = false;
+      return;
+    }
+
+    const finishOne = (): void => {
+      this.backgroundRunning.update((n) => Math.max(0, n - 1));
+    };
+
+    this.backgroundLogLines.set([]);
+    this.backgroundRunning.set(2);
+
+    const runOne = (
+      cam: CameraFeed,
+      logPrefix: string,
+      gatewayCameraCode: string,
+    ): void => {
+      const url = resolveCameraVideoUrl(cam);
+      void this.chunkAnalysis
+        .analyzeUrlInThreeSecondChunks(
+          url,
+          (line) => {
+            this.backgroundLogLines.update((lines) => [...lines, line]);
+          },
+          undefined,
+          {
+            cameraCode: gatewayCameraCode,
+            cameraId: cam.id,
+            logPrefix,
+            onDetection: (p) => this.handleAiChunkDetection(p),
+          },
+        )
+        .then(() => {
+          this.backgroundLogLines.update((lines) => [
+            ...lines,
+            `${logPrefix} Finished.`,
+          ]);
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          this.backgroundLogLines.update((lines) => [
+            ...lines,
+            `${logPrefix} Error: ${msg}`,
+          ]);
+        })
+        .finally(finishOne);
+    };
+
+    runOne(main, '[Main/violence]', 'cam-main');
+    runOne(entrance, '[Entrance/fire]', 'cam-entrance');
+  }
+
+  private handleAiChunkDetection(payload: {
+    kind: 'violence' | 'fire';
+    cameraId: string;
+    cameraCode: string;
+    startSec: number;
+    endSec: number;
+    summary: string;
+    response: unknown;
+  }): void {
+    if (payload.kind === 'fire') {
+      const res = payload.response as FirePredictResponse;
+      const conf = Math.max(
+        0,
+        ...(res.results ?? []).map((r) => r.max_fire_confidence ?? 0),
+      );
+      this.alerts.addLocalAiDetectionAlert({
+        kind: 'fire',
+        cameraId: payload.cameraId,
+        title: 'Possible fire — Entrance Queue',
+        description: `${payload.summary} (${payload.cameraCode})`,
+        confidencePct: conf * 100,
+      });
+      return;
+    }
+    const res = payload.response as ViolencePredictResponse;
+    const r0 = res.results?.[0];
+    const conf = (r0?.violent_probability ?? 0) * 100;
+    this.alerts.addLocalAiDetectionAlert({
+      kind: 'violence',
+      cameraId: payload.cameraId,
+      title: 'Possible violence — Main Floor',
+      description: `${payload.summary} (${payload.cameraCode})`,
+      confidencePct: conf,
+    });
   }
 
   protected toggleChunkAuto(): void {
@@ -689,6 +827,12 @@ export class DashboardComponent {
             total,
             last: summary,
           });
+        },
+        {
+          cameraCode: cameraId,
+          cameraId,
+          logPrefix: `[${cam.label}]`,
+          onDetection: (p) => this.handleAiChunkDetection(p),
         },
       )
       .then(() => {
