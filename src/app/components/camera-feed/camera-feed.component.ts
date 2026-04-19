@@ -7,6 +7,7 @@ import {
 } from '@angular/core';
 
 import { BoundingBox, CameraFeed } from '../../models/venue.models';
+import { resolveCameraVideoUrl } from '../../utils/camera-default-video';
 
 @Component({
   selector: 'va-camera-feed',
@@ -18,25 +19,16 @@ import { BoundingBox, CameraFeed } from '../../models/venue.models';
       (click)="select.emit(camera().id)"
       [class]="wrapperClass()"
     >
-      @if (camera().videoUrl) {
-        <video
-          class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-          [src]="camera().videoUrl"
-          [poster]="camera().imageUrl || undefined"
-          autoplay
-          muted
-          loop
-          playsinline
-          preload="metadata"
-        ></video>
-      } @else {
-        <img
-          class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-300"
-          [src]="camera().imageUrl"
-          [alt]="camera().label + ' camera feed'"
-          loading="lazy"
-        />
-      }
+      <video
+        class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+        [src]="videoSrc()"
+        [poster]="camera().imageUrl || undefined"
+        autoplay
+        muted
+        loop
+        playsinline
+        preload="metadata"
+      ></video>
 
       <!-- Subtle vignette to make labels legible without heavy overlays -->
       <div
@@ -126,6 +118,11 @@ export class CameraFeedComponent {
   readonly boxes = input<BoundingBox[]>([]);
 
   readonly select = output<string>();
+
+  /** Always an MP4 path so the tile is a `<video>`, not an `<img>`. */
+  protected readonly videoSrc = computed(() =>
+    resolveCameraVideoUrl(this.camera()),
+  );
 
   protected readonly labelClass = computed(() => {
     const base =

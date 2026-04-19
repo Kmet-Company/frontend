@@ -3,11 +3,15 @@
   "version": "0.1.0",
   "description": "Vigilant Architect - venue safety & event operations dashboard",
   "scripts": {
-    "ng": "ng",
-    "start": "ng serve",
-    "build": "ng build",
-    "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "start": "node ./node_modules/@angular/cli/bin/ng.js serve",
+    "dev:db-api": "node ./scripts/dev-db-api.cjs",
+    "dev:backend": "node ./scripts/dev-backend.cjs",
+    "start:docker-api": "npm run dev:db-api && npm start",
+    "start:local": "npm run dev:backend && npm start",
+    "start:with-api": "node ./node_modules/@angular/cli/bin/ng.js serve --configuration with-api-proxy",
+    "build": "node ./node_modules/@angular/cli/bin/ng.js build",
+    "watch": "node ./node_modules/@angular/cli/bin/ng.js build --watch --configuration development",
+    "test": "node ./node_modules/@angular/cli/bin/ng.js test"
   },
   "private": true,
   "dependencies": {

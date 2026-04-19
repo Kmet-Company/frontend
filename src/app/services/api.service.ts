@@ -2,6 +2,8 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map, shareReplay } from 'rxjs';
 
+import { resolveCameraVideoUrl } from '../utils/camera-default-video';
+
 import {
   AlertSeverity,
   AlertStatus,
@@ -254,7 +256,10 @@ export class ApiService {
     zone: row.zone,
     icon: row.icon ?? 'videocam',
     imageUrl: row.image_url ?? '',
-    videoUrl: row.video_url ?? undefined,
+    videoUrl: resolveCameraVideoUrl({
+      id: row.code,
+      videoUrl: row.video_url ?? undefined,
+    }),
     occupancy: row.occupancy ?? undefined,
     density: row.density ?? undefined,
   });
