@@ -73,5 +73,21 @@ export const routes: Routes = [
       ),
     title: 'Settings · ViReAl',
   },
+  {
+    path: 'support',
+    loadComponent: () =>
+      import('./pages/support/support.component').then(
+        (m) => m.SupportComponent,
+      ),
+    title: 'Tech Stack · ViReAl',
+  },
+  {
+    path: 'profile',
+    loadComponent: () =>
+      import('./pages/profile/profile.component').then(
+        (m) => m.ProfileComponent,
+      ),
+    title: 'Profile · ViReAl',
+  },
   { path: '**', redirectTo: '' },
 ];

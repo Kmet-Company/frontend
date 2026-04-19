@@ -149,14 +149,6 @@ import { VideoChunkAnalysisService, toAbsoluteVideoUrl, captureStreamFromVideo }
                 <span class="hidden sm:inline">Focus</span>
               </button>
             </div>
-
-            <button
-              type="button"
-              class="flex items-center gap-1.5 px-3 h-9 rounded-lg bg-primary text-on-primary text-xs font-semibold hover:brightness-110 transition-all"
-            >
-              <span class="material-symbols-outlined text-[16px]">add</span>
-              Add camera
-            </button>
           </div>
         </header>
 
