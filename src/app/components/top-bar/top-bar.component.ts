@@ -1,13 +1,15 @@
+import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 
 import { AlertsService } from '../../services/alerts.service';
 import { AuthService } from '../../services/auth.service';
+import { VenueAlert } from '../../models/venue.models';
 
 @Component({
   selector: 'va-top-bar',
   standalone: true,
-  imports: [],
+  imports: [DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <header
@@ -55,19 +57,130 @@ import { AuthService } from '../../services/auth.service';
           <span class="text-base font-semibold tracking-tight">{{ clock() }}</span>
         </div>
 
-        <button
-          type="button"
-          class="relative p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded-lg transition-colors"
-          title="Notifications"
-        >
-          <span class="material-symbols-outlined">notifications</span>
-          @if (alerts.activeAlertCount() > 0) {
-            <span
-              class="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-error text-on-error text-[9px] font-bold flex items-center justify-center"
-              >{{ alerts.activeAlertCount() }}</span
+        <div class="relative">
+          <button
+            type="button"
+            class="relative p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded-lg transition-colors"
+            [class.bg-surface-container-high]="notificationsOpen()"
+            [class.text-on-surface]="notificationsOpen()"
+            title="Notifications"
+            (click)="toggleNotifications($event)"
+          >
+            <span class="material-symbols-outlined">notifications</span>
+            @if (alerts.activeAlertCount() > 0) {
+              <span
+                class="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-error text-on-error text-[9px] font-bold flex items-center justify-center"
+                >{{ alerts.activeAlertCount() }}</span
+              >
+            }
+          </button>
+
+          @if (notificationsOpen()) {
+            <!-- Click-away backdrop -->
+            <div
+              class="fixed inset-0 z-40"
+              (click)="closeNotifications()"
+            ></div>
+
+            <div
+              class="absolute right-0 top-full mt-2 w-96 max-h-[70vh] rounded-xl bg-surface-container-high shadow-2xl ring-1 ring-outline-variant/40 z-50 flex flex-col overflow-hidden animate-slide-in"
+              role="dialog"
+              aria-label="Active alerts"
+              (click)="$event.stopPropagation()"
             >
+              <div
+                class="flex items-center justify-between px-4 py-3 border-b border-outline-variant/40"
+              >
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-on-surface-variant"
+                    >notifications_active</span
+                  >
+                  <h2 class="text-sm font-semibold text-on-surface">Active alerts</h2>
+                  <span
+                    class="text-[10px] px-1.5 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-bold tabular-nums"
+                    >{{ activeAlerts().length }}</span
+                  >
+                </div>
+                <button
+                  type="button"
+                  class="p-1 rounded-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest"
+                  (click)="closeNotifications()"
+                  title="Close"
+                >
+                  <span class="material-symbols-outlined text-[18px]">close</span>
+                </button>
+              </div>
+
+              <div class="overflow-y-auto flex-1">
+                @if (activeAlerts().length === 0) {
+                  <div
+                    class="px-4 py-10 text-center text-xs text-on-surface-variant"
+                  >
+                    <span
+                      class="material-symbols-outlined text-[32px] text-on-surface-variant/60 mb-2 block"
+                      >check_circle</span
+                    >
+                    No active alerts. All clear.
+                  </div>
+                } @else {
+                  <ul class="divide-y divide-outline-variant/30">
+                    @for (alert of activeAlerts(); track alert.id) {
+                      <li>
+                        <button
+                          type="button"
+                          class="w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-surface-container-highest transition-colors"
+                          (click)="openAlert(alert)"
+                        >
+                          <span
+                            class="w-1 self-stretch rounded-full flex-shrink-0"
+                            [class.bg-error]="alert.severity === 'critical'"
+                            [class.bg-secondary]="alert.severity === 'warning'"
+                            [class.bg-primary]="alert.severity === 'info'"
+                          ></span>
+                          <div class="flex-1 min-w-0">
+                            <div class="flex items-start justify-between gap-2">
+                              <h3
+                                class="text-sm font-semibold text-on-surface leading-snug truncate"
+                              >
+                                {{ alert.title }}
+                              </h3>
+                              <span
+                                class="text-[10px] text-on-surface-variant flex-shrink-0 tabular-nums"
+                                [title]="alert.detectedAt | date: 'medium'"
+                              >
+                                {{ formatTimeAgo(alert.detectedAt) }}
+                              </span>
+                            </div>
+                            <div
+                              class="flex items-center gap-x-3 gap-y-0.5 mt-1 text-[11px] text-on-surface-variant flex-wrap"
+                            >
+                              <span class="flex items-center gap-1 min-w-0">
+                                <span class="material-symbols-outlined text-[13px]"
+                                  >location_on</span
+                                >
+                                <span class="truncate">{{ alert.location }}</span>
+                              </span>
+                              <span
+                                class="uppercase tracking-wide font-bold text-[9px] px-1.5 py-0.5 rounded"
+                                [class.bg-error-container]="alert.severity === 'critical'"
+                                [class.text-on-error-container]="alert.severity === 'critical'"
+                                [class.bg-secondary-container]="alert.severity === 'warning'"
+                                [class.text-on-secondary-container]="alert.severity === 'warning'"
+                                [class.bg-primary-container]="alert.severity === 'info'"
+                                [class.text-on-primary-container]="alert.severity === 'info'"
+                                >{{ alert.severity }}</span
+                              >
+                            </div>
+                          </div>
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+            </div>
           }
-        </button>
+        </div>
 
         <button
           type="button"
@@ -88,6 +201,15 @@ export class TopBarComponent {
   protected readonly clock = signal<string>(this.formatNow());
   protected readonly shift = signal<string>(this.computeShiftLabel());
   protected readonly shiftTitle = signal<string>(this.computeShiftTitle());
+  protected readonly notificationsOpen = signal<boolean>(false);
+
+  protected readonly activeAlerts = computed(() =>
+    this.alerts
+      .alerts()
+      .filter((a) => a.status === 'active')
+      .slice()
+      .sort((a, b) => b.detectedAt.getTime() - a.detectedAt.getTime()),
+  );
 
   /** "Mia Chen · Operations Lead" style tooltip for the avatar circle. */
   protected readonly avatarTitle = computed(() => {
@@ -105,6 +227,30 @@ export class TopBarComponent {
       this.shift.set(this.computeShiftLabel());
       this.shiftTitle.set(this.computeShiftTitle());
     }, 30_000);
+  }
+
+  protected toggleNotifications(event: Event): void {
+    event.stopPropagation();
+    this.notificationsOpen.update((v) => !v);
+  }
+
+  protected closeNotifications(): void {
+    this.notificationsOpen.set(false);
+  }
+
+  protected openAlert(alert: VenueAlert): void {
+    this.closeNotifications();
+    this.alerts.focusAlert(alert);
+    void this.router.navigate(['/incidents', alert.id]);
+  }
+
+  protected formatTimeAgo(at: Date): string {
+    const minutes = Math.max(1, Math.round((Date.now() - at.getTime()) / 60_000));
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.round(hours / 24);
+    return `${days}d ago`;
   }
 
   protected onLogoClick(): void {
