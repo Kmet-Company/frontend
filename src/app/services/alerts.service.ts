@@ -40,8 +40,7 @@ export class AlertsService {
       icon: 'layers',
       occupancy: 612,
       density: 'high',
-      imageUrl:
-        'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&w=1200&q=70',
+      imageUrl: '',
       videoUrl: '/cam-main.mp4',
     },
     {
@@ -51,9 +50,8 @@ export class AlertsService {
       icon: 'local_bar',
       occupancy: 184,
       density: 'medium',
-      imageUrl:
-        'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=1200&q=70',
-      videoUrl: '/cam-main.mp4',
+      imageUrl: '',
+      videoUrl: '/bilijard.mp4',
     },
     {
       id: 'cam-entrance',
@@ -62,8 +60,7 @@ export class AlertsService {
       icon: 'groups',
       occupancy: 96,
       density: 'medium',
-      imageUrl:
-        'https://images.unsplash.com/photo-1493676304819-0d7a8d026dcf?auto=format&fit=crop&w=1200&q=70',
+      imageUrl: '',
       videoUrl: '/kocani.mp4',
     },
     {
@@ -73,9 +70,8 @@ export class AlertsService {
       icon: 'theater_comedy',
       occupancy: 842,
       density: 'high',
-      imageUrl:
-        '',
-      videoUrl: '/black_and_white.mp4',
+      imageUrl: '',
+      videoUrl: '/fight_0014.mp4',
     },
   ]);
 
@@ -93,8 +89,7 @@ export class AlertsService {
       zone: 'South Concourse',
       cameraId: 'cam-bar',
       minutesAgo: 12,
-      preview:
-        'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=400&q=60',
+      preview: '',
       boundingBox: { x: 0.34, y: 0.28, width: 0.28, height: 0.46, label: 'Conflict 82%' },
       involvedParties: 3,
       leadResponder: 'Unit 14 · Officer Miller',
@@ -147,8 +142,7 @@ export class AlertsService {
       zone: 'North Hall',
       cameraId: 'cam-stage',
       minutesAgo: 5,
-      preview:
-        'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?auto=format&fit=crop&w=400&q=60',
+      preview: '',
       involvedParties: 180,
       leadResponder: 'Floor Lead · Priya R.',
       events: [
@@ -181,8 +175,7 @@ export class AlertsService {
       zone: 'Front of House',
       cameraId: 'cam-entrance',
       minutesAgo: 9,
-      preview:
-        'https://images.unsplash.com/photo-1493676304819-0d7a8d026dcf?auto=format&fit=crop&w=400&q=60',
+      preview: '',
       involvedParties: 84,
       leadResponder: 'Gate Supervisor · Jamal K.',
       events: [
@@ -208,8 +201,7 @@ export class AlertsService {
       zone: 'Dance Floor',
       cameraId: 'cam-main',
       minutesAgo: 2,
-      preview:
-        'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&w=400&q=60',
+      preview: '',
       boundingBox: { x: 0.48, y: 0.54, width: 0.14, height: 0.22, label: 'Person down 74%' },
       involvedParties: 1,
       leadResponder: 'Medic 02 · R. Okafor',
@@ -236,8 +228,7 @@ export class AlertsService {
       zone: 'South Concourse',
       cameraId: 'cam-bar',
       minutesAgo: 7,
-      preview:
-        'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=400&q=60',
+      preview: '',
       involvedParties: 1,
       leadResponder: 'Floor Team · Marco B.',
       events: [
@@ -330,7 +321,6 @@ export class AlertsService {
       location: 'Main Bar · right side',
       guestHandle: 'Guest · Alex K.',
       guestEmail: 'alex.k@guestmail.com',
-      photoUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400&h=300&fit=crop',
       submittedAt: this.minutesAgo(1),
       status: 'new',
       priority: 'high',
@@ -345,7 +335,6 @@ export class AlertsService {
       location: 'Main Stage · front-left',
       guestHandle: 'Anonymous',
       guestEmail: 'anonymous-8420@guestmail.com',
-      photoUrl: 'https://images.unsplash.com/photo-1429962714451-bb934ecdc4ec?w=400&h=300&fit=crop',
       submittedAt: this.minutesAgo(4),
       status: 'new',
       priority: 'high',
@@ -360,7 +349,6 @@ export class AlertsService {
       location: '2F Restrooms',
       guestHandle: 'Guest · Priya M.',
       guestEmail: 'priya.m@guestmail.com',
-      photoUrl: 'https://images.unsplash.com/photo-1582481725274-d63bcb9c2766?w=400&h=300&fit=crop',
       submittedAt: this.minutesAgo(8),
       status: 'acknowledged',
       priority: 'medium',
@@ -389,7 +377,6 @@ export class AlertsService {
       location: 'Stage · right exit',
       guestHandle: 'Guest #A47',
       guestEmail: 'a47@guestmail.com',
-      photoUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=400&h=300&fit=crop',
       submittedAt: this.minutesAgo(2),
       status: 'new',
       priority: 'high',

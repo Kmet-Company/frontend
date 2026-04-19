@@ -51,13 +51,6 @@ type StatusFilter = 'all' | 'active' | 'resolved';
                 {{ alerts.criticalAlertCount() }} critical
               </span>
             </div>
-            <button
-              type="button"
-              class="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-primary text-on-primary text-sm font-semibold hover:brightness-110 transition-all"
-            >
-              <span class="material-symbols-outlined text-[18px]">note_add</span>
-              New report
-            </button>
           </div>
         </header>
 

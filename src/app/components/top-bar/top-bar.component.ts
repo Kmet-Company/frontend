@@ -1,6 +1,6 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
 import { AlertsService } from '../../services/alerts.service';
 import { AuthService } from '../../services/auth.service';
@@ -9,7 +9,7 @@ import { VenueAlert } from '../../models/venue.models';
 @Component({
   selector: 'va-top-bar',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <header
@@ -30,11 +30,6 @@ import { VenueAlert } from '../../models/venue.models';
           class="brand-logo h-10 w-auto flex-shrink-0 select-none"
           draggable="false"
         />
-        <div class="leading-tight min-w-0 hidden md:block ml-1 pl-3 border-l border-outline-variant/40">
-          <div class="text-[10px] uppercase tracking-widest text-on-surface-variant truncate">
-            Venue Operations
-          </div>
-        </div>
       </button>
 
       <!-- Right: shift · clock · notifications · avatar -->
@@ -182,14 +177,13 @@ import { VenueAlert } from '../../models/venue.models';
           }
         </div>
 
-        <button
-          type="button"
-          (click)="auth.openAccount()"
+        <a
+          routerLink="/profile"
           class="w-9 h-9 rounded-full bg-surface-container-highest overflow-hidden flex items-center justify-center text-sm font-bold text-on-surface-variant hover:text-on-surface hover:ring-2 hover:ring-primary/40 transition"
           [title]="avatarTitle()"
         >
           {{ auth.initials() }}
-        </button>
+        </a>
       </div>
     </header>
   `,

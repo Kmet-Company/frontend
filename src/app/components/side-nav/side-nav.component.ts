@@ -97,15 +97,15 @@ interface NavGroup {
             <span class="block text-on-surface font-semibold truncate">{{ currentUser.name }}</span>
           </div>
         }
-        <button
-          type="button"
-          (click)="auth.openAccount()"
+        <a
+          routerLink="/support"
+          routerLinkActive="bg-surface-container text-on-surface"
           class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors"
-          title="Manage your Keycloak account"
+          title="About this project — tech stack &amp; architecture"
         >
           <span class="material-symbols-outlined text-[20px]">help</span>
-          <span class="flex-1 text-left">Support</span>
-        </button>
+          <span class="flex-1 text-left">Help &amp; About</span>
+        </a>
         <button
           type="button"
           (click)="auth.logout()"
